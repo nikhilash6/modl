@@ -73,6 +73,7 @@ impl RegistryIndex {
 
     /// The URL to fetch the latest index from
     pub fn remote_url() -> &'static str {
-        "https://github.com/modshq/mods-registry/releases/latest/download/index.json"
+        // TODO: Move to modshq org when created
+        "https://raw.githubusercontent.com/pedropaf/mods-registry/main/index.json"
     }
 }
