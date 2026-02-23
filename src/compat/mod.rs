@@ -27,7 +27,10 @@ pub fn symlink_path(
         .join(file_name)
 }
 
-/// Auto-detect installed tools by checking common locations
+/// Auto-detect installed tools by checking common locations.
+///
+/// On Windows, also scans drive roots (C:\, D:\) for ComfyUI Portable
+/// installations, which is the most common setup.
 pub fn detect_tools() -> Vec<(ToolType, PathBuf)> {
     let mut found = Vec::new();
     let home = match dirs::home_dir() {
@@ -35,12 +38,50 @@ pub fn detect_tools() -> Vec<(ToolType, PathBuf)> {
         None => return found,
     };
 
-    // Common ComfyUI locations
-    for dir in &["ComfyUI", "comfyui", ".comfyui"] {
+    // Common ComfyUI locations (relative to home)
+    let comfyui_dirs = vec![
+        "ComfyUI",
+        "comfyui",
+        ".comfyui",
+        "ai-lab/ComfyUI",
+    ];
+
+    for dir in &comfyui_dirs {
         let path = home.join(dir);
         if path.join("models").exists() {
             found.push((ToolType::Comfyui, path));
             break;
+        }
+    }
+
+    // Windows: scan drive roots for ComfyUI Portable
+    #[cfg(windows)]
+    {
+        if !found.iter().any(|(t, _)| matches!(t, ToolType::Comfyui)) {
+            for drive in &["C:", "D:", "E:", "F:"] {
+                let portable_names = [
+                    "ComfyUI_windows_portable",
+                    "ComfyUI-portable",
+                    "ComfyUI",
+                ];
+                for name in &portable_names {
+                    let path = PathBuf::from(format!("{}\\{}", drive, name));
+                    // Portable has ComfyUI subfolder inside the portable dir
+                    let inner = path.join("ComfyUI");
+                    if inner.join("models").exists() {
+                        found.push((ToolType::Comfyui, inner));
+                        break;
+                    }
+                    // Or the root itself may have models/
+                    if path.join("models").exists() {
+                        found.push((ToolType::Comfyui, path));
+                        break;
+                    }
+                }
+                if found.iter().any(|(t, _)| matches!(t, ToolType::Comfyui)) {
+                    break;
+                }
+            }
         }
     }
 
@@ -54,4 +95,36 @@ pub fn detect_tools() -> Vec<(ToolType, PathBuf)> {
     }
 
     found
+}
+
+/// Check if Windows Developer Mode is enabled (for symlinks without admin).
+/// Returns None on non-Windows platforms.
+#[allow(dead_code)]
+pub fn check_windows_dev_mode() -> Option<bool> {
+    #[cfg(windows)]
+    {
+        // Check via registry: HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock
+        // DeveloperModeEnabled = 1 means enabled
+        use std::process::Command;
+        let output = Command::new("reg")
+            .args([
+                "query",
+                r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock",
+                "/v",
+                "AllowDevelopmentWithoutDevLicense",
+            ])
+            .output();
+        match output {
+            Ok(o) => {
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                Some(stdout.contains("0x1"))
+            }
+            Err(_) => Some(false),
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        None
+    }
 }

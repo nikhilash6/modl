@@ -3,7 +3,7 @@ use console::style;
 use dialoguer::{Confirm, MultiSelect, Select};
 use std::path::PathBuf;
 
-use crate::compat::detect_tools;
+use crate::compat::{check_windows_dev_mode, detect_tools};
 use crate::core::config::{Config, GpuOverride, StorageConfig, TargetConfig, ToolType};
 use crate::core::gpu;
 
@@ -60,6 +60,32 @@ pub async fn run() -> Result<()> {
         style("✓").green(),
         storage_root.display()
     );
+
+    // Windows: check Developer Mode for symlink support
+    if let Some(dev_mode_enabled) = check_windows_dev_mode() {
+        if !dev_mode_enabled {
+            println!();
+            println!(
+                "  {} Windows Developer Mode is not enabled.",
+                style("⚠").yellow()
+            );
+            println!("  Without it, mods will use hard links instead of symlinks.");
+            println!("  Hard links work fine, but require store and tools on the same drive.");
+            println!();
+            println!(
+                "  To enable symlinks (recommended): {} → {} → {}",
+                style("Settings").bold(),
+                style("Privacy & security").bold(),
+                style("For developers → Developer Mode").bold()
+            );
+            println!();
+        } else {
+            println!(
+                "  {} Windows Developer Mode enabled (symlinks available)",
+                style("✓").green()
+            );
+        }
+    }
 
     // 2. Detect tools
     println!();
