@@ -1,18 +1,21 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// Create a symlink from `link` pointing to `target`
+/// Create a link from `link` pointing to `target`.
+/// On Unix, uses symlinks.
+/// On Windows, tries symlinks first, then falls back to hard links
+/// (which don't require Admin/Developer Mode).
 pub fn create(link: &Path, target: &Path) -> Result<()> {
-    // Ensure parent directory of symlink exists
+    // Ensure parent directory exists
     if let Some(parent) = link.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
     }
 
-    // Remove existing symlink if present
+    // Remove existing symlink/hard-link if present
     if link.is_symlink() {
         std::fs::remove_file(link)
-            .with_context(|| format!("Failed to remove existing symlink: {}", link.display()))?;
+            .with_context(|| format!("Failed to remove existing link: {}", link.display()))?;
     } else if link.exists() {
         // Real file exists — don't overwrite
         anyhow::bail!(
@@ -22,22 +25,50 @@ pub fn create(link: &Path, target: &Path) -> Result<()> {
     }
 
     #[cfg(unix)]
-    std::os::unix::fs::symlink(target, link).with_context(|| {
-        format!(
-            "Failed to create symlink: {} -> {}",
-            link.display(),
-            target.display()
-        )
-    })?;
+    {
+        std::os::unix::fs::symlink(target, link).with_context(|| {
+            format!(
+                "Failed to create symlink: {} -> {}",
+                link.display(),
+                target.display()
+            )
+        })?;
+    }
 
     #[cfg(windows)]
-    std::os::windows::fs::symlink_file(target, link).with_context(|| {
-        format!(
-            "Failed to create symlink: {} -> {}",
-            link.display(),
-            target.display()
-        )
-    })?;
+    {
+        // 1. Try symlink first (works if Admin or Developer Mode is enabled)
+        let symlink_result = std::os::windows::fs::symlink_file(target, link);
+
+        if let Err(symlink_err) = symlink_result {
+            // 2. Fall back to hard link (no admin needed, but same drive required)
+            match std::fs::hard_link(target, link) {
+                Ok(_) => {
+                    // Hard link succeeded
+                }
+                Err(hard_link_err) => {
+                    // Windows error 17 = cross-device link
+                    if hard_link_err.raw_os_error() == Some(17) {
+                        anyhow::bail!(
+                            "Cannot link files across different drives on Windows without Admin rights.\n\
+                             Your mods store and target folder must be on the same drive.\n\
+                             Store: {}\nTarget: {}",
+                            target.display(),
+                            link.display()
+                        );
+                    } else {
+                        anyhow::bail!(
+                            "Failed to link file on Windows.\n\
+                             Symlink error: {}\n\
+                             Hard link error: {}",
+                            symlink_err,
+                            hard_link_err
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     Ok(())
 }
@@ -58,7 +89,10 @@ pub fn is_valid(link: &Path) -> bool {
     link.is_symlink() && link.exists()
 }
 
-/// Find all broken symlinks in a directory
+/// Find all broken links in a directory.
+/// Note: On Windows with hard links, broken links are less common since
+/// hard links retain data even if the original store file is deleted.
+/// This primarily catches broken symlinks (Unix/Windows Dev Mode).
 pub fn find_broken(dir: &Path) -> Result<Vec<std::path::PathBuf>> {
     let mut broken = Vec::new();
 
