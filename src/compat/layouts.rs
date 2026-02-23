@@ -6,6 +6,7 @@ use crate::core::manifest::AssetType;
 pub fn comfyui(asset_type: &AssetType) -> PathBuf {
     match asset_type {
         AssetType::Checkpoint => PathBuf::from("models/checkpoints"),
+        AssetType::DiffusionModel => PathBuf::from("models/diffusion_models"),
         AssetType::Lora => PathBuf::from("models/loras"),
         AssetType::Vae => PathBuf::from("models/vae"),
         AssetType::TextEncoder => PathBuf::from("models/text_encoders"),
@@ -21,6 +22,7 @@ pub fn comfyui(asset_type: &AssetType) -> PathBuf {
 pub fn a1111(asset_type: &AssetType) -> PathBuf {
     match asset_type {
         AssetType::Checkpoint => PathBuf::from("models/Stable-diffusion"),
+        AssetType::DiffusionModel => PathBuf::from("models/diffusion_models"),
         AssetType::Lora => PathBuf::from("models/Lora"),
         AssetType::Vae => PathBuf::from("models/VAE"),
         AssetType::TextEncoder => PathBuf::from("models/text_encoder"),
@@ -36,6 +38,7 @@ pub fn a1111(asset_type: &AssetType) -> PathBuf {
 pub fn invokeai(asset_type: &AssetType) -> PathBuf {
     match asset_type {
         AssetType::Checkpoint => PathBuf::from("models/sd"),
+        AssetType::DiffusionModel => PathBuf::from("models/diffusion_models"),
         AssetType::Lora => PathBuf::from("models/lora"),
         AssetType::Vae => PathBuf::from("models/vae"),
         AssetType::TextEncoder => PathBuf::from("models/text_encoder"),

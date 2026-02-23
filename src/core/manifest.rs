@@ -75,6 +75,7 @@ pub struct Manifest {
 #[serde(rename_all = "snake_case")]
 pub enum AssetType {
     Checkpoint,
+    DiffusionModel,
     Lora,
     Vae,
     TextEncoder,
@@ -89,6 +90,7 @@ impl std::fmt::Display for AssetType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Checkpoint => write!(f, "checkpoint"),
+            Self::DiffusionModel => write!(f, "diffusion_model"),
             Self::Lora => write!(f, "lora"),
             Self::Vae => write!(f, "vae"),
             Self::TextEncoder => write!(f, "text_encoder"),

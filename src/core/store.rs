@@ -18,9 +18,14 @@ impl Store {
 
     /// Get the storage path for a file: store/<type>/<sha256_prefix>/<filename>
     pub fn path_for(&self, asset_type: &AssetType, sha256: &str, file_name: &str) -> PathBuf {
+        let prefix = if sha256.len() >= 16 {
+            &sha256[..16]
+        } else {
+            sha256
+        };
         self.root
             .join(asset_type.to_string())
-            .join(&sha256[..16]) // Use first 16 chars of hash as directory
+            .join(prefix)
             .join(file_name)
     }
 
