@@ -221,14 +221,15 @@ pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) ->
             }
         }
 
-        // Record in database
+        // Record in database (use actual file size from disk, not manifest estimate)
+        let actual_size = std::fs::metadata(&store_path).map(|m| m.len()).unwrap_or(size);
         db.insert_installed(
             &item.manifest.id,
             &item.manifest.name,
             &item.manifest.asset_type.to_string(),
             selected_variant.as_deref(),
             &sha256,
-            size,
+            actual_size,
             &file_name,
             &store_path.to_string_lossy(),
         )?;

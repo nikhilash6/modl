@@ -6,7 +6,7 @@ use crate::core::db::Database;
 use crate::core::store::Store;
 use crate::core::symlink;
 
-pub async fn run() -> Result<()> {
+pub async fn run(verify_hashes: bool) -> Result<()> {
     println!(
         "{}",
         style("mods doctor — running diagnostics").bold().cyan()
@@ -36,9 +36,10 @@ pub async fn run() -> Result<()> {
         }
     }
 
-    // 2. Verify store files exist for installed models
+    // 2. Verify store files exist with correct size
     println!();
     println!("{} Checking store files...", style("→").cyan());
+    let mut store_ok = true;
     for m in &models {
         let path = std::path::Path::new(&m.store_path);
         if !path.exists() {
@@ -49,45 +50,72 @@ pub async fn run() -> Result<()> {
                 m.store_path
             );
             issues += 1;
-        }
-    }
-    if issues == 0 {
-        println!("  {} All store files present", style("✓").green());
-    }
-
-    // 3. Verify hashes (optional, can be slow for large files)
-    println!();
-    println!("{} Verifying file hashes...", style("→").cyan());
-    for m in &models {
-        let path = std::path::Path::new(&m.store_path);
-        if path.exists() {
-            match Store::verify_hash(path, &m.sha256) {
-                Ok(true) => {}
-                Ok(false) => {
-                    println!(
-                        "  {} Hash mismatch for '{}' — file may be corrupted",
-                        style("✗").red(),
-                        m.name
-                    );
-                    println!(
-                        "    Fix: {}",
-                        style(format!("mods uninstall {} && mods install {}", m.id, m.id)).cyan()
-                    );
-                    issues += 1;
-                }
-                Err(e) => {
-                    println!(
-                        "  {} Could not verify '{}': {}",
-                        style("!").yellow(),
-                        m.name,
-                        e
-                    );
-                }
+            store_ok = false;
+        } else if let Ok(meta) = std::fs::metadata(path) {
+            if meta.len() != m.size {
+                println!(
+                    "  {} Size mismatch for '{}' — expected {} bytes, got {}",
+                    style("✗").red(),
+                    m.name,
+                    m.size,
+                    meta.len()
+                );
+                println!(
+                    "    Fix: {}",
+                    style(format!("mods uninstall {} && mods install {}", m.id, m.id)).cyan()
+                );
+                issues += 1;
+                store_ok = false;
             }
         }
     }
-    if issues == 0 {
-        println!("  {} All hashes verified", style("✓").green());
+    if store_ok {
+        println!("  {} All store files present and sizes match", style("✓").green());
+    }
+
+    // 3. Verify hashes (opt-in, slow for large files)
+    if verify_hashes {
+        println!();
+        println!("{} Verifying file hashes...", style("→").cyan());
+        for m in &models {
+            let path = std::path::Path::new(&m.store_path);
+            if path.exists() {
+                match Store::verify_hash(path, &m.sha256) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        println!(
+                            "  {} Hash mismatch for '{}' — file may be corrupted",
+                            style("✗").red(),
+                            m.name
+                        );
+                        println!(
+                            "    Fix: {}",
+                            style(format!("mods uninstall {} && mods install {}", m.id, m.id))
+                                .cyan()
+                        );
+                        issues += 1;
+                    }
+                    Err(e) => {
+                        println!(
+                            "  {} Could not verify '{}': {}",
+                            style("!").yellow(),
+                            m.name,
+                            e
+                        );
+                    }
+                }
+            }
+        }
+        if issues == 0 {
+            println!("  {} All hashes verified", style("✓").green());
+        }
+    } else {
+        println!();
+        println!(
+            "  {} Hash verification skipped (use {} for full check)",
+            style("i").dim(),
+            style("--verify-hashes").cyan()
+        );
     }
 
     // Summary

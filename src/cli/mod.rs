@@ -93,7 +93,11 @@ pub enum Commands {
     Space,
 
     /// Check for broken symlinks, missing deps, corrupt files
-    Doctor,
+    Doctor {
+        /// Also verify SHA256 hashes (slow for large files)
+        #[arg(long)]
+        verify_hashes: bool,
+    },
 
     /// Garbage collect — remove unreferenced files from the store
     Gc,
@@ -168,7 +172,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             .await
         }
         Commands::Space => space::run().await,
-        Commands::Doctor => doctor::run().await,
+        Commands::Doctor { verify_hashes } => doctor::run(verify_hashes).await,
         Commands::Gc => gc::run().await,
         Commands::Link { comfyui, a1111 } => link::run(comfyui.as_deref(), a1111.as_deref()).await,
         Commands::Auth { provider } => auth::run(&provider).await,
