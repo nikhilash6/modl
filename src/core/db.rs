@@ -114,6 +114,17 @@ impl Database {
         Ok(())
     }
 
+    /// Update the store_path for a model (used during storage migration)
+    pub fn update_store_path(&self, id: &str, new_path: &str) -> Result<()> {
+        self.conn
+            .execute(
+                "UPDATE installed SET store_path = ?1 WHERE id = ?2",
+                params![new_path, id],
+            )
+            .context("Failed to update store path")?;
+        Ok(())
+    }
+
     /// List all installed models
     pub fn list_installed(&self, type_filter: Option<&str>) -> Result<Vec<InstalledModel>> {
         let mut stmt = if let Some(t) = type_filter {

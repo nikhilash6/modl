@@ -1,4 +1,5 @@
 mod auth;
+mod config;
 mod doctor;
 mod export;
 mod gc;
@@ -99,6 +100,14 @@ pub enum Commands {
         verify_hashes: bool,
     },
 
+    /// View or update configuration (e.g., storage.root, gpu.vram_mb)
+    Config {
+        /// Config key to view or set (e.g., storage.root)
+        key: Option<String>,
+        /// New value (required when setting a key)
+        value: Option<String>,
+    },
+
     /// Garbage collect — remove unreferenced files from the store
     Gc,
 
@@ -170,6 +179,9 @@ pub async fn run(cli: Cli) -> Result<()> {
                 min_rating,
             )
             .await
+        }
+        Commands::Config { key, value } => {
+            config::run(key.as_deref(), value.as_deref()).await
         }
         Commands::Space => space::run().await,
         Commands::Doctor { verify_hashes } => doctor::run(verify_hashes).await,

@@ -103,6 +103,26 @@ impl std::fmt::Display for AssetType {
     }
 }
 
+impl std::str::FromStr for AssetType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "checkpoint" => Ok(Self::Checkpoint),
+            "diffusion_model" => Ok(Self::DiffusionModel),
+            "lora" => Ok(Self::Lora),
+            "vae" => Ok(Self::Vae),
+            "text_encoder" => Ok(Self::TextEncoder),
+            "controlnet" => Ok(Self::Controlnet),
+            "upscaler" => Ok(Self::Upscaler),
+            "embedding" => Ok(Self::Embedding),
+            "ipadapter" => Ok(Self::Ipadapter),
+            "segmentation" => Ok(Self::Segmentation),
+            _ => anyhow::bail!("Unknown asset type: {}", s),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Variant {
     pub id: String,

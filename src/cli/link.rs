@@ -5,8 +5,10 @@ use std::path::{Path, PathBuf};
 
 use crate::core::config::{Config, TargetConfig, ToolType};
 use crate::core::db::Database;
+use crate::core::manifest::Manifest;
 use crate::core::registry::RegistryIndex;
 use crate::core::store::Store;
+use crate::core::symlink;
 
 pub async fn run(comfyui: Option<&str>, a1111: Option<&str>) -> Result<()> {
     if comfyui.is_none() && a1111.is_none() {
@@ -36,6 +38,15 @@ pub async fn run(comfyui: Option<&str>, a1111: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+/// Info about a matched file: which manifest and variant it belongs to
+struct MatchedFile {
+    manifest: Manifest,
+    variant_id: Option<String>,
+    hash: String,
+    file_path: PathBuf,
+    size: u64,
+}
+
 async fn link_tool(
     path_str: &str,
     tool_type: ToolType,
@@ -63,7 +74,7 @@ async fn link_tool(
         path.display()
     );
 
-    // Find model files
+    // Find model files (skip files that are already symlinks — already managed)
     let models_dir = path.join("models");
     if !models_dir.exists() {
         println!(
@@ -76,26 +87,27 @@ async fn link_tool(
     let files = find_model_files(&models_dir)?;
     println!("  Found {} model files", files.len());
 
+    let store = Store::new(config.store_root());
+    let mut matched_files: Vec<MatchedFile> = Vec::new();
+
     if !files.is_empty() {
-        // Build a hash → manifest lookup and a set of known file sizes for pre-filtering
+        // Build a hash → (manifest, variant_id) lookup and a set of known file sizes
         let mut known_sizes: std::collections::HashSet<u64> = std::collections::HashSet::new();
-        let hash_map: std::collections::HashMap<String, &crate::core::manifest::Manifest> =
-            if let Some(idx) = index {
-                let mut map = std::collections::HashMap::new();
-                for m in &idx.items {
-                    for v in &m.variants {
-                        map.insert(v.sha256.clone(), m);
-                        known_sizes.insert(v.size);
-                    }
-                    if let Some(ref f) = m.file {
-                        map.insert(f.sha256.clone(), m);
-                        known_sizes.insert(f.size);
-                    }
+        let mut hash_map: std::collections::HashMap<String, (&Manifest, Option<&str>)> =
+            std::collections::HashMap::new();
+
+        if let Some(idx) = index {
+            for m in &idx.items {
+                for v in &m.variants {
+                    hash_map.insert(v.sha256.clone(), (m, Some(v.id.as_str())));
+                    known_sizes.insert(v.size);
                 }
-                map
-            } else {
-                std::collections::HashMap::new()
-            };
+                if let Some(ref f) = m.file {
+                    hash_map.insert(f.sha256.clone(), (m, None));
+                    known_sizes.insert(f.size);
+                }
+            }
+        }
 
         let pb = ProgressBar::new(files.len() as u64);
         pb.set_style(
@@ -104,7 +116,6 @@ async fn link_tool(
                 .unwrap(),
         );
 
-        let mut matched = 0;
         let mut skipped = 0u64;
         for file in &files {
             pb.inc(1);
@@ -117,27 +128,17 @@ async fn link_tool(
                 }
             }
 
-            if let Ok(hash) = Store::hash_file(file)
-                && let Some(manifest) = hash_map.get(&hash)
-            {
-                let size = std::fs::metadata(file).map(|m| m.len()).unwrap_or(0);
-                let file_name = file
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("unknown");
-
-                // Register in DB
-                db.insert_installed(
-                    &manifest.id,
-                    &manifest.name,
-                    &manifest.asset_type.to_string(),
-                    None,
-                    &hash,
-                    size,
-                    file_name,
-                    &file.to_string_lossy(),
-                )?;
-                matched += 1;
+            if let Ok(hash) = Store::hash_file(file) {
+                if let Some((manifest, variant_id)) = hash_map.get(&hash) {
+                    let size = std::fs::metadata(file).map(|m| m.len()).unwrap_or(0);
+                    matched_files.push(MatchedFile {
+                        manifest: (*manifest).clone(),
+                        variant_id: variant_id.map(String::from),
+                        hash,
+                        file_path: file.clone(),
+                        size,
+                    });
+                }
             }
         }
 
@@ -152,8 +153,72 @@ async fn link_tool(
         println!(
             "  {} Matched {} files to registry entries",
             style("✓").green(),
-            matched
+            matched_files.len()
         );
+    }
+
+    // Migrate matched files: move to store, replace with symlink
+    if !matched_files.is_empty() {
+        println!();
+        println!("{} Adopting matched files into store...", style("→").cyan());
+
+        for mf in &matched_files {
+            let file_name = mf
+                .file_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown");
+
+            let store_path = store.path_for(&mf.manifest.asset_type, &mf.hash, file_name);
+
+            if store_path.exists() {
+                // Already in store (e.g., from a previous link or install).
+                // Just replace the original with a symlink if it's not one already.
+                if !mf.file_path.is_symlink() {
+                    std::fs::remove_file(&mf.file_path)?;
+                    symlink::create(&mf.file_path, &store_path)?;
+                    println!(
+                        "  {} {} (already in store, linked)",
+                        style("→").dim(),
+                        mf.manifest.name,
+                    );
+                } else {
+                    println!(
+                        "  {} {} (already managed)",
+                        style("i").dim(),
+                        mf.manifest.name,
+                    );
+                }
+            } else {
+                // Move file to store, replace with symlink
+                store.ensure_dir(&store_path)?;
+                std::fs::rename(&mf.file_path, &store_path).with_context(|| {
+                    format!(
+                        "Failed to move {} to store at {}",
+                        mf.file_path.display(),
+                        store_path.display()
+                    )
+                })?;
+                symlink::create(&mf.file_path, &store_path)?;
+                println!(
+                    "  {} {} → store",
+                    style("✓").green(),
+                    mf.manifest.name,
+                );
+            }
+
+            // Record in DB
+            db.insert_installed(
+                &mf.manifest.id,
+                &mf.manifest.name,
+                &mf.manifest.asset_type.to_string(),
+                mf.variant_id.as_deref(),
+                &mf.hash,
+                mf.size,
+                file_name,
+                &store_path.to_string_lossy(),
+            )?;
+        }
     }
 
     // Add to config targets if not already present
@@ -188,6 +253,9 @@ fn find_model_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()
         let path = entry.path();
         if path.is_dir() && !path.is_symlink() {
             find_model_files_recursive(&path, files)?;
+        } else if path.is_symlink() {
+            // Skip files already managed by mods
+            continue;
         } else if let Some("safetensors" | "ckpt" | "pt" | "pth" | "bin" | "gguf") =
             path.extension().and_then(|e| e.to_str())
         {
