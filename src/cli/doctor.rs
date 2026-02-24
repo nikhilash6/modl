@@ -51,26 +51,29 @@ pub async fn run(verify_hashes: bool) -> Result<()> {
             );
             issues += 1;
             store_ok = false;
-        } else if let Ok(meta) = std::fs::metadata(path) {
-            if meta.len() != m.size {
-                println!(
-                    "  {} Size mismatch for '{}' — expected {} bytes, got {}",
-                    style("✗").red(),
-                    m.name,
-                    m.size,
-                    meta.len()
-                );
-                println!(
-                    "    Fix: {}",
-                    style(format!("mods uninstall {} && mods install {}", m.id, m.id)).cyan()
-                );
-                issues += 1;
-                store_ok = false;
-            }
+        } else if let Ok(meta) = std::fs::metadata(path)
+            && meta.len() != m.size
+        {
+            println!(
+                "  {} Size mismatch for '{}' — expected {} bytes, got {}",
+                style("✗").red(),
+                m.name,
+                m.size,
+                meta.len()
+            );
+            println!(
+                "    Fix: {}",
+                style(format!("mods uninstall {} && mods install {}", m.id, m.id)).cyan()
+            );
+            issues += 1;
+            store_ok = false;
         }
     }
     if store_ok {
-        println!("  {} All store files present and sizes match", style("✓").green());
+        println!(
+            "  {} All store files present and sizes match",
+            style("✓").green()
+        );
     }
 
     // 3. Verify hashes (opt-in, slow for large files)

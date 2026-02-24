@@ -121,24 +121,25 @@ async fn link_tool(
             pb.inc(1);
 
             // Size pre-filter: skip hashing files whose size doesn't match any known variant
-            if let Ok(meta) = std::fs::metadata(file) {
-                if !known_sizes.is_empty() && !known_sizes.contains(&meta.len()) {
-                    skipped += 1;
-                    continue;
-                }
+            if let Ok(meta) = std::fs::metadata(file)
+                && !known_sizes.is_empty()
+                && !known_sizes.contains(&meta.len())
+            {
+                skipped += 1;
+                continue;
             }
 
-            if let Ok(hash) = Store::hash_file(file) {
-                if let Some((manifest, variant_id)) = hash_map.get(&hash) {
-                    let size = std::fs::metadata(file).map(|m| m.len()).unwrap_or(0);
-                    matched_files.push(MatchedFile {
-                        manifest: (*manifest).clone(),
-                        variant_id: variant_id.map(String::from),
-                        hash,
-                        file_path: file.clone(),
-                        size,
-                    });
-                }
+            if let Ok(hash) = Store::hash_file(file)
+                && let Some((manifest, variant_id)) = hash_map.get(&hash)
+            {
+                let size = std::fs::metadata(file).map(|m| m.len()).unwrap_or(0);
+                matched_files.push(MatchedFile {
+                    manifest: (*manifest).clone(),
+                    variant_id: variant_id.map(String::from),
+                    hash,
+                    file_path: file.clone(),
+                    size,
+                });
             }
         }
 
@@ -200,11 +201,7 @@ async fn link_tool(
                     )
                 })?;
                 symlink::create(&mf.file_path, &store_path)?;
-                println!(
-                    "  {} {} → store",
-                    style("✓").green(),
-                    mf.manifest.name,
-                );
+                println!("  {} {} → store", style("✓").green(), mf.manifest.name,);
             }
 
             // Record in DB

@@ -76,9 +76,8 @@ impl RegistryIndex {
     /// Uses registry.mods.sh (Cloudflare-cached) as primary,
     /// with raw GitHub as fallback. Override via MODS_REGISTRY_URL env var.
     pub fn remote_url() -> String {
-        std::env::var("MODS_REGISTRY_URL").unwrap_or_else(|_| {
-            "https://registry.mods.sh/index.json".to_string()
-        })
+        std::env::var("MODS_REGISTRY_URL")
+            .unwrap_or_else(|_| "https://registry.mods.sh/index.json".to_string())
     }
 
     /// Fallback URL if the primary registry is unreachable

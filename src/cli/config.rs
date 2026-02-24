@@ -56,7 +56,10 @@ fn show_key(key: &str) -> Result<()> {
             Some(ref gpu) => println!("{}", gpu.vram_mb),
             None => println!("(auto-detected)"),
         },
-        _ => anyhow::bail!("Unknown config key: {}. Available: storage.root, gpu.vram_mb", key),
+        _ => anyhow::bail!(
+            "Unknown config key: {}. Available: storage.root, gpu.vram_mb",
+            key
+        ),
     }
     Ok(())
 }
@@ -106,13 +109,20 @@ fn set_config(key: &str, value: &str) -> Result<()> {
                 vram
             );
         }
-        _ => anyhow::bail!("Unknown config key: {}. Available: storage.root, gpu.vram_mb", key),
+        _ => anyhow::bail!(
+            "Unknown config key: {}. Available: storage.root, gpu.vram_mb",
+            key
+        ),
     }
 
     Ok(())
 }
 
-fn migrate_store(old_root: &PathBuf, new_root: &PathBuf, config: &Config) -> Result<()> {
+fn migrate_store(
+    old_root: &std::path::Path,
+    new_root: &std::path::Path,
+    config: &Config,
+) -> Result<()> {
     let old_store = old_root.join("store");
     let new_store = new_root.join("store");
 
@@ -158,8 +168,8 @@ fn migrate_store(old_root: &PathBuf, new_root: &PathBuf, config: &Config) -> Res
     for m in &models {
         let old_path = &m.store_path;
         if let Some(new_path) = old_path
-            .strip_prefix(&old_store.to_string_lossy().as_ref())
-            .or_else(|| old_path.strip_prefix(&old_root.to_string_lossy().as_ref()))
+            .strip_prefix(old_store.to_string_lossy().as_ref())
+            .or_else(|| old_path.strip_prefix(old_root.to_string_lossy().as_ref()))
         {
             let new_store_path = format!("{}{}", new_root.join("store").display(), new_path);
 

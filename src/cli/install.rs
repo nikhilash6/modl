@@ -159,17 +159,11 @@ pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) ->
                         if Store::verify_hash(&target_path, &sha256)? {
                             println!("{}", style("match!").green());
                             // Move file to store, create symlink
-                            std::fs::rename(&target_path, &store_path)
-                                .with_context(|| format!(
-                                    "Failed to move {} to store",
-                                    target_path.display()
-                                ))?;
+                            std::fs::rename(&target_path, &store_path).with_context(|| {
+                                format!("Failed to move {} to store", target_path.display())
+                            })?;
                             symlink::create(&target_path, &store_path)?;
-                            println!(
-                                "  {} Adopted → {}",
-                                style("→").dim(),
-                                store_path.display()
-                            );
+                            println!("  {} Adopted → {}", style("→").dim(), store_path.display());
                             adopted = true;
                             break;
                         } else {
@@ -222,7 +216,9 @@ pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) ->
         }
 
         // Record in database (use actual file size from disk, not manifest estimate)
-        let actual_size = std::fs::metadata(&store_path).map(|m| m.len()).unwrap_or(size);
+        let actual_size = std::fs::metadata(&store_path)
+            .map(|m| m.len())
+            .unwrap_or(size);
         db.insert_installed(
             &item.manifest.id,
             &item.manifest.name,

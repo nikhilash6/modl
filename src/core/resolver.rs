@@ -55,7 +55,10 @@ fn resolve_recursive(
         resolve_recursive(
             &dep.id,
             dep.optional_variant.as_deref(),
-            index, installed, visited, plan,
+            index,
+            installed,
+            visited,
+            plan,
         )?;
     }
 

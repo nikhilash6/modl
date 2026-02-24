@@ -144,14 +144,16 @@ mod tests {
         let good_link = tmp.path().join("good.txt");
         create(&good_link, &target).unwrap();
 
-        // Create a broken symlink
-        let bad_target = tmp.path().join("missing.txt");
-        let bad_link = tmp.path().join("broken.txt");
+        // Create a broken symlink (only testable on Unix)
         #[cfg(unix)]
-        std::os::unix::fs::symlink(&bad_target, &bad_link).unwrap();
+        {
+            let bad_target = tmp.path().join("missing.txt");
+            let bad_link = tmp.path().join("broken.txt");
+            std::os::unix::fs::symlink(&bad_target, &bad_link).unwrap();
 
-        let broken = find_broken(tmp.path()).unwrap();
-        assert_eq!(broken.len(), 1);
-        assert_eq!(broken[0], bad_link);
+            let broken = find_broken(tmp.path()).unwrap();
+            assert_eq!(broken.len(), 1);
+            assert_eq!(broken[0], bad_link);
+        }
     }
 }

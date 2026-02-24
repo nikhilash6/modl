@@ -39,12 +39,7 @@ pub fn detect_tools() -> Vec<(ToolType, PathBuf)> {
     };
 
     // Common ComfyUI locations (relative to home)
-    let comfyui_dirs = vec![
-        "ComfyUI",
-        "comfyui",
-        ".comfyui",
-        "ai-lab/ComfyUI",
-    ];
+    let comfyui_dirs = vec!["ComfyUI", "comfyui", ".comfyui", "ai-lab/ComfyUI"];
 
     for dir in &comfyui_dirs {
         let path = home.join(dir);
@@ -59,11 +54,7 @@ pub fn detect_tools() -> Vec<(ToolType, PathBuf)> {
     {
         if !found.iter().any(|(t, _)| matches!(t, ToolType::Comfyui)) {
             for drive in &["C:", "D:", "E:", "F:"] {
-                let portable_names = [
-                    "ComfyUI_windows_portable",
-                    "ComfyUI-portable",
-                    "ComfyUI",
-                ];
+                let portable_names = ["ComfyUI_windows_portable", "ComfyUI-portable", "ComfyUI"];
                 for name in &portable_names {
                     let path = PathBuf::from(format!("{}\\{}", drive, name));
                     // Portable has ComfyUI subfolder inside the portable dir

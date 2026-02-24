@@ -39,13 +39,13 @@ pub async fn download_file(
         };
 
         // If we already have the expected size, we're done
-        if let Some(expected) = expected_size {
-            if start_byte >= expected {
-                // Already fully downloaded, just rename
-                std::fs::rename(&partial_path, dest)
-                    .context("Failed to move downloaded file to final location")?;
-                return Ok(());
-            }
+        if let Some(expected) = expected_size
+            && start_byte >= expected
+        {
+            // Already fully downloaded, just rename
+            std::fs::rename(&partial_path, dest)
+                .context("Failed to move downloaded file to final location")?;
+            return Ok(());
         }
 
         let client = reqwest::Client::new();
@@ -142,7 +142,10 @@ pub async fn download_file(
         if let Some(err) = stream_error {
             retries += 1;
             if retries > MAX_RETRIES {
-                pb.abandon_with_message(format!("{} ✗ failed after {} retries", file_name, MAX_RETRIES));
+                pb.abandon_with_message(format!(
+                    "{} ✗ failed after {} retries",
+                    file_name, MAX_RETRIES
+                ));
                 return Err(err).context(format!(
                     "Download failed after {} retries. Partial file saved at {}. \
                      Re-run the same command to resume.",

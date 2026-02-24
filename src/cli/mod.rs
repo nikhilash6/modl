@@ -184,9 +184,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             )
             .await
         }
-        Commands::Config { key, value } => {
-            config::run(key.as_deref(), value.as_deref()).await
-        }
+        Commands::Config { key, value } => config::run(key.as_deref(), value.as_deref()).await,
         Commands::Space => space::run().await,
         Commands::Doctor { verify_hashes } => doctor::run(verify_hashes).await,
         Commands::Gc => gc::run().await,
@@ -217,10 +215,7 @@ fn dump_cli_schema() {
         }
 
         let name = sub.get_name().to_string();
-        let description = sub
-            .get_about()
-            .map(|s| s.to_string())
-            .unwrap_or_default();
+        let description = sub.get_about().map(|s| s.to_string()).unwrap_or_default();
 
         let mut args = Vec::new();
         let mut flags = Vec::new();
@@ -231,10 +226,7 @@ fn dump_cli_schema() {
             }
 
             let id = arg.get_id().to_string();
-            let help = arg
-                .get_help()
-                .map(|s| s.to_string())
-                .unwrap_or_default();
+            let help = arg.get_help().map(|s| s.to_string()).unwrap_or_default();
             let required = arg.is_required_set();
 
             let short = arg.get_short().map(|c| format!("-{c}"));
@@ -264,10 +256,14 @@ fn dump_cli_schema() {
                     "is_bool": is_bool,
                 });
                 if let Some(s) = &short {
-                    flag.as_object_mut().unwrap().insert("short".into(), serde_json::json!(s));
+                    flag.as_object_mut()
+                        .unwrap()
+                        .insert("short".into(), serde_json::json!(s));
                 }
                 if let Some(d) = &default {
-                    flag.as_object_mut().unwrap().insert("default".into(), serde_json::json!(d));
+                    flag.as_object_mut()
+                        .unwrap()
+                        .insert("default".into(), serde_json::json!(d));
                 }
                 flags.push(flag);
             }
