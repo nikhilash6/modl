@@ -13,7 +13,7 @@ pub async fn run(
     tag: Option<&str>,
     min_rating: Option<f32>,
 ) -> Result<()> {
-    let index = RegistryIndex::load()?;
+    let index = RegistryIndex::load_or_fetch().await?;
 
     let mut results = index.search(query);
 
@@ -52,6 +52,7 @@ pub async fn run(
     table.set_header(vec![
         Cell::new("Name").fg(Color::Cyan),
         Cell::new("Type").fg(Color::Cyan),
+        Cell::new("Variants").fg(Color::Cyan),
         Cell::new("Size").fg(Color::Cyan),
         Cell::new("Rating").fg(Color::Cyan),
         Cell::new("Tags").fg(Color::Cyan),
@@ -75,6 +76,18 @@ pub async fn run(
             "—".to_string()
         };
 
+        let variants_str = if m.variants.len() > 1 {
+            m.variants
+                .iter()
+                .map(|v| v.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        } else if m.variants.len() == 1 {
+            m.variants[0].id.clone()
+        } else {
+            "—".to_string()
+        };
+
         let rating = m
             .rating
             .map(|r| format!("{:.1}", r))
@@ -91,6 +104,7 @@ pub async fn run(
         table.add_row(vec![
             Cell::new(&m.name),
             Cell::new(m.asset_type.to_string()),
+            Cell::new(&variants_str),
             Cell::new(size),
             Cell::new(rating),
             Cell::new(tags),

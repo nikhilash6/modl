@@ -6,7 +6,7 @@ use crate::core::db::Database;
 use crate::core::registry::RegistryIndex;
 
 pub async fn run(id: &str) -> Result<()> {
-    let index = RegistryIndex::load()?;
+    let index = RegistryIndex::load_or_fetch().await?;
     let db = Database::open()?;
 
     let manifest = index.find(id).ok_or_else(|| {

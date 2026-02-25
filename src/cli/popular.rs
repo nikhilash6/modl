@@ -6,7 +6,7 @@ use indicatif::HumanBytes;
 use crate::core::registry::RegistryIndex;
 
 pub async fn run(type_filter: Option<&str>, for_model: Option<&str>, _period: &str) -> Result<()> {
-    let index = RegistryIndex::load()?;
+    let index = RegistryIndex::load_or_fetch().await?;
 
     let mut items: Vec<_> = index.items.iter().collect();
 

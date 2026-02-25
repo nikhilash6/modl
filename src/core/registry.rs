@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use super::manifest::Manifest;
 
@@ -83,5 +84,102 @@ impl RegistryIndex {
     /// Fallback URL if the primary registry is unreachable
     pub fn fallback_url() -> &'static str {
         "https://raw.githubusercontent.com/modshq-org/mods-registry/main/index.json"
+    }
+
+    /// Check if the local index is missing or older than `max_age`
+    pub fn is_stale(max_age: Duration) -> bool {
+        let path = Self::local_path();
+        if !path.exists() {
+            return true;
+        }
+        match std::fs::metadata(&path) {
+            Ok(meta) => match meta.modified() {
+                Ok(modified) => {
+                    modified
+                        .elapsed()
+                        .unwrap_or(max_age + Duration::from_secs(1))
+                        > max_age
+                }
+                Err(_) => true,
+            },
+            Err(_) => true,
+        }
+    }
+
+    /// Fetch the index from a URL
+    async fn fetch_from(client: &reqwest::Client, url: &str) -> Result<String> {
+        let response = client
+            .get(url)
+            .send()
+            .await
+            .with_context(|| format!("Failed to connect to {}", url))?;
+        if !response.status().is_success() {
+            anyhow::bail!("HTTP {} from {}", response.status(), url);
+        }
+        response
+            .text()
+            .await
+            .with_context(|| format!("Failed to read response from {}", url))
+    }
+
+    /// Fetch latest registry from remote and save to local cache
+    pub async fn fetch_and_save() -> Result<Self> {
+        let primary_url = Self::remote_url();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(15))
+            .build()
+            .unwrap_or_default();
+
+        let body = match Self::fetch_from(&client, &primary_url).await {
+            Ok(body) => body,
+            Err(e) => {
+                let fallback = Self::fallback_url();
+                eprintln!(
+                    "  ⚠ Primary registry unavailable ({}), trying fallback...",
+                    e
+                );
+                Self::fetch_from(&client, fallback)
+                    .await
+                    .context("Failed to fetch registry from both primary and fallback URLs")?
+            }
+        };
+
+        let index: RegistryIndex =
+            serde_json::from_str(&body).context("Failed to parse registry index")?;
+
+        let path = Self::local_path();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&path, &body).context("Failed to write index to disk")?;
+
+        Ok(index)
+    }
+
+    /// Load the index from cache if fresh, or auto-fetch if missing/stale (>24h)
+    pub async fn load_or_fetch() -> Result<Self> {
+        use console::style;
+
+        let max_age = Duration::from_secs(24 * 60 * 60);
+        if Self::is_stale(max_age) {
+            eprintln!(
+                "{} Registry index is {} — updating...",
+                style("→").cyan(),
+                if Self::local_path().exists() {
+                    "stale"
+                } else {
+                    "missing"
+                }
+            );
+            let index = Self::fetch_and_save().await?;
+            eprintln!(
+                "{} Registry updated — {} models available",
+                style("✓").green(),
+                style(index.items.len()).bold()
+            );
+            Ok(index)
+        } else {
+            Self::load()
+        }
     }
 }

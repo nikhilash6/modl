@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use console::style;
+use dialoguer::Select;
 use indicatif::HumanBytes;
 use std::collections::HashSet;
 
@@ -17,7 +18,7 @@ use crate::core::symlink;
 
 pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) -> Result<()> {
     let config = Config::load()?;
-    let index = RegistryIndex::load()?;
+    let index = RegistryIndex::load_or_fetch().await?;
     let db = Database::open()?;
 
     // Get set of installed model IDs
@@ -25,7 +26,7 @@ pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) ->
     let installed_ids: HashSet<String> = installed_list.iter().map(|m| m.id.clone()).collect();
 
     // Resolve dependency tree
-    let plan = resolver::resolve(id, variant, &index, &installed_ids)?;
+    let mut plan = resolver::resolve(id, variant, &index, &installed_ids)?;
 
     // Auto-select variants based on GPU if not specified
     let vram = config
@@ -33,6 +34,20 @@ pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) ->
         .as_ref()
         .map(|g| g.vram_mb)
         .or_else(|| gpu::detect().map(|g| g.vram_mb));
+
+    // Interactive variant selection for the primary model (if it has multiple variants
+    // and the user didn't specify --variant)
+    if variant.is_none() {
+        for item in &mut plan.items {
+            if item.manifest.id == id
+                && !item.already_installed
+                && item.manifest.variants.len() > 1
+            {
+                let selected = prompt_variant_selection(&item.manifest, vram)?;
+                item.variant_id = Some(selected);
+            }
+        }
+    }
 
     // Display the plan
     println!(
@@ -44,7 +59,9 @@ pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) ->
 
     let mut total_download: u64 = 0;
     for item in &plan.items {
-        let (_file_name, size, variant_label) = get_file_info(&item.manifest, variant, vram);
+        let effective_variant = item.variant_id.as_deref().or(variant);
+        let (_file_name, size, variant_label) =
+            get_file_info(&item.manifest, effective_variant, vram);
         let status = if item.already_installed {
             style("installed").green().to_string()
         } else {
@@ -97,9 +114,11 @@ pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) ->
 
     // Download each item
     for item in &items_to_install {
-        let (file_name, size, selected_variant) = get_file_info(&item.manifest, variant, vram);
-        let url = get_download_url(&item.manifest, variant, vram);
-        let sha256 = get_sha256(&item.manifest, variant, vram);
+        let effective_variant = item.variant_id.as_deref().or(variant);
+        let (file_name, size, selected_variant) =
+            get_file_info(&item.manifest, effective_variant, vram);
+        let url = get_download_url(&item.manifest, effective_variant, vram);
+        let sha256 = get_sha256(&item.manifest, effective_variant, vram);
 
         let store_path = store.path_for(&item.manifest.asset_type, &sha256, &file_name);
         store
@@ -174,9 +193,43 @@ pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) ->
             }
 
             if !adopted {
-                download::download_file(&url, &store_path, Some(size), auth_token.as_deref())
+                match download::download_file(&url, &store_path, Some(size), auth_token.as_deref())
                     .await
-                    .with_context(|| format!("Failed to download {}", item.manifest.name))?;
+                {
+                    Ok(()) => {}
+                    Err(e) => {
+                        // Check for 401 Unauthorized and suggest auth command
+                        let err_msg = format!("{}", e);
+                        if err_msg.contains("401") || err_msg.contains("Unauthorized") {
+                            println!();
+                            println!(
+                                "  {} This model requires authentication.",
+                                style("\u{2717}").red()
+                            );
+                            let provider = item
+                                .manifest
+                                .auth
+                                .as_ref()
+                                .map(|a| a.provider.as_str())
+                                .unwrap_or("huggingface");
+                            println!(
+                                "    Run: {}",
+                                style(format!("mods auth {}", provider)).cyan()
+                            );
+                            if let Some(ref auth) = item.manifest.auth {
+                                if let Some(ref terms) = auth.terms_url {
+                                    println!(
+                                        "    Accept terms at: {}",
+                                        style(terms).underlined()
+                                    );
+                                }
+                            }
+                            println!();
+                        }
+                        return Err(e)
+                            .with_context(|| format!("Failed to download {}", item.manifest.name));
+                    }
+                }
 
                 // Verify hash
                 if !Store::verify_hash(&store_path, &sha256)? {
@@ -318,4 +371,68 @@ fn select_variant<'a>(
 
     // Fallback: pick the first (usually smallest or most common)
     manifest.variants.first()
+}
+
+/// Show an interactive menu for the user to pick a variant
+fn prompt_variant_selection(manifest: &Manifest, vram: Option<u64>) -> Result<String> {
+    // Determine which variant would be auto-selected based on VRAM
+    let auto_selected = vram.and_then(|vram_mb| {
+        let variant_info: Vec<(String, u64)> = manifest
+            .variants
+            .iter()
+            .map(|v| (v.id.clone(), v.vram_required.unwrap_or(0)))
+            .collect();
+        gpu::select_variant(vram_mb, &variant_info)
+    });
+
+    let items: Vec<String> = manifest
+        .variants
+        .iter()
+        .map(|v| {
+            let recommended = auto_selected
+                .as_ref()
+                .map(|s| s == &v.id)
+                .unwrap_or(false);
+            let precision = v
+                .precision
+                .as_ref()
+                .map(|p| format!(", {}", p))
+                .unwrap_or_default();
+            let note = v
+                .note
+                .as_ref()
+                .map(|n| format!(" - {}", n))
+                .unwrap_or_default();
+            format!(
+                "{}  ({}{}){}{}",
+                v.id,
+                HumanBytes(v.size),
+                precision,
+                note,
+                if recommended {
+                    format!("  {}", style("<- recommended for your GPU").dim())
+                } else {
+                    String::new()
+                },
+            )
+        })
+        .collect();
+
+    let default_idx = auto_selected
+        .as_ref()
+        .and_then(|s| manifest.variants.iter().position(|v| &v.id == s))
+        .unwrap_or(0);
+
+    println!(
+        "\n  {} {} has multiple variants:",
+        style("?").yellow(),
+        style(&manifest.name).bold()
+    );
+
+    let selection = Select::new()
+        .items(&items)
+        .default(default_idx)
+        .interact()?;
+
+    Ok(manifest.variants[selection].id.clone())
 }
