@@ -10,8 +10,11 @@ mod install;
 mod link;
 mod list;
 mod popular;
+mod runtime;
 mod search;
 mod space;
+mod train;
+mod train_setup;
 mod uninstall;
 mod update;
 mod upgrade;
@@ -158,6 +161,41 @@ pub enum Commands {
         #[arg(long, default_value = "week")]
         period: String,
     },
+
+    /// Train a LoRA with managed runtime (Phase 1 bridge)
+    Train {
+        /// Dataset directory path
+        #[arg(long)]
+        dataset: String,
+        /// Base model id (e.g. flux-schnell)
+        #[arg(long, default_value = "flux-schnell")]
+        base: String,
+        /// Output LoRA name
+        #[arg(long)]
+        name: String,
+        /// Trigger word used during training
+        #[arg(long, default_value = "OHWX")]
+        trigger: String,
+        /// Training steps
+        #[arg(long, default_value_t = 2000)]
+        steps: u32,
+        /// Generate config and bootstrap runtime but do not execute proxy
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Prepare managed training dependencies (ai-toolkit + torch stack)
+    TrainSetup {
+        /// Force re-install of training dependencies
+        #[arg(long)]
+        reinstall: bool,
+    },
+
+    /// Manage embedded Python runtime
+    Runtime {
+        #[command(subcommand)]
+        command: runtime::RuntimeCommands,
+    },
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
@@ -207,6 +245,16 @@ pub async fn run(cli: Cli) -> Result<()> {
             r#for,
             period,
         } => popular::run(r#type.as_deref(), r#for.as_deref(), &period).await,
+        Commands::Train {
+            dataset,
+            base,
+            name,
+            trigger,
+            steps,
+            dry_run,
+        } => train::run(&dataset, &base, &name, &trigger, steps, dry_run).await,
+        Commands::TrainSetup { reinstall } => train_setup::run(reinstall).await,
+        Commands::Runtime { command } => runtime::run(command).await,
     }
 }
 

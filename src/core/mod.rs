@@ -5,5 +5,7 @@ pub mod gpu;
 pub mod manifest;
 pub mod registry;
 pub mod resolver;
+pub mod runtime;
 pub mod store;
 pub mod symlink;
+pub mod training;

@@ -43,6 +43,7 @@ sha2 = "0.10"
 # Archive extraction (for self-update)
 flate2 = "1"
 tar = "0.4"
+zstd = "0.13"
 
 # GPU detection
 nvml-wrapper = "0.10"
