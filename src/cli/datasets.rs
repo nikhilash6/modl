@@ -16,7 +16,7 @@ pub enum DatasetCommands {
         from: String,
     },
     /// List all managed datasets
-    List,
+    Ls,
     /// Validate a dataset directory
     Validate {
         /// Dataset name or path to validate
@@ -27,7 +27,7 @@ pub enum DatasetCommands {
 pub async fn run(command: DatasetCommands) -> Result<()> {
     match command {
         DatasetCommands::Create { name, from } => run_create(&name, &from).await,
-        DatasetCommands::List => run_list().await,
+        DatasetCommands::Ls => run_list().await,
         DatasetCommands::Validate { name_or_path } => run_validate(&name_or_path).await,
     }
 }

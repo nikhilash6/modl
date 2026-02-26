@@ -36,12 +36,9 @@ pub struct Cli {
 }
 
 #[derive(Subcommand)]
-pub enum Commands {
-    /// Interactive first-run setup — detect tools, configure storage
-    Init,
-
-    /// Install a model, LoRA, VAE, or other asset (with dependency resolution)
-    Install {
+pub enum ModelCommands {
+    /// Download a model, LoRA, VAE, or other asset (with dependency resolution)
+    Pull {
         /// Model ID from the registry (e.g., flux-dev, realistic-skin-v3)
         id: String,
         /// Force a specific variant (e.g., fp16, fp8, gguf-q4)
@@ -56,8 +53,8 @@ pub enum Commands {
     },
 
     /// Remove an installed model
-    Uninstall {
-        /// Model ID to uninstall
+    Rm {
+        /// Model ID to remove
         id: String,
         /// Force removal even if other items depend on this
         #[arg(long)]
@@ -65,7 +62,7 @@ pub enum Commands {
     },
 
     /// List installed models
-    List {
+    Ls {
         /// Filter by asset type (checkpoint, lora, vae, text_encoder, etc.)
         #[arg(long, short = 't')]
         r#type: Option<String>,
@@ -95,62 +92,6 @@ pub enum Commands {
         min_rating: Option<f32>,
     },
 
-    /// Show disk usage breakdown
-    Space,
-
-    /// Check for broken symlinks, missing deps, corrupt files
-    Doctor {
-        /// Also verify SHA256 hashes (slow for large files)
-        #[arg(long)]
-        verify_hashes: bool,
-    },
-
-    /// View or update configuration (e.g., storage.root, gpu.vram_mb)
-    Config {
-        /// Config key to view or set (e.g., storage.root)
-        key: Option<String>,
-        /// New value (required when setting a key)
-        value: Option<String>,
-    },
-
-    /// Garbage collect — remove unreferenced files from the store
-    Gc,
-
-    /// Link an existing tool's model folder into mods
-    Link {
-        /// Path to ComfyUI installation
-        #[arg(long)]
-        comfyui: Option<String>,
-        /// Path to A1111 installation
-        #[arg(long)]
-        a1111: Option<String>,
-    },
-
-    /// Configure authentication (HuggingFace, Civitai)
-    Auth {
-        /// Auth provider: huggingface or civitai
-        provider: String,
-    },
-
-    /// Fetch latest registry index
-    Update,
-
-    /// Export installed state to a lock file
-    Export,
-
-    /// Import and install from a lock file
-    Import {
-        /// Path to mods.lock file
-        path: String,
-    },
-
-    /// Dump CLI schema as JSON (for docs generation)
-    #[command(hide = true)]
-    CliSchema,
-
-    /// Update mods CLI to the latest release
-    Upgrade,
-
     /// Show popular/trending models
     Popular {
         /// Filter by asset type
@@ -163,8 +104,61 @@ pub enum Commands {
         period: String,
     },
 
+    /// Link an existing tool's model folder into mods
+    Link {
+        /// Path to ComfyUI installation
+        #[arg(long)]
+        comfyui: Option<String>,
+        /// Path to A1111 installation
+        #[arg(long)]
+        a1111: Option<String>,
+    },
+
+    /// Fetch latest registry index
+    Update,
+
+    /// Show disk usage breakdown
+    Space,
+
+    /// Garbage collect — remove unreferenced files from the store
+    Gc,
+
+    /// Export installed state to a lock file
+    Export,
+
+    /// Import and install from a lock file
+    Import {
+        /// Path to mods.lock file
+        path: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TrainSubcommands {
+    /// Prepare managed training dependencies (ai-toolkit + torch stack)
+    Setup {
+        /// Force re-install of training dependencies
+        #[arg(long)]
+        reinstall: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum Commands {
+    /// Interactive first-run setup — detect tools, configure storage
+    Init,
+
+    /// Manage models, LoRAs, VAEs, and other assets
+    Model {
+        #[command(subcommand)]
+        command: ModelCommands,
+    },
+
     /// Train a LoRA with managed runtime
+    #[command(args_conflicts_with_subcommands = true)]
     Train {
+        #[command(subcommand)]
+        command: Option<TrainSubcommands>,
         /// Dataset name or directory path
         #[arg(long)]
         dataset: Option<String>,
@@ -191,15 +185,8 @@ pub enum Commands {
         dry_run: bool,
     },
 
-    /// Prepare managed training dependencies (ai-toolkit + torch stack)
-    TrainSetup {
-        /// Force re-install of training dependencies
-        #[arg(long)]
-        reinstall: bool,
-    },
-
     /// Manage datasets for training
-    Datasets {
+    Dataset {
         #[command(subcommand)]
         command: datasets::DatasetCommands,
     },
@@ -209,21 +196,91 @@ pub enum Commands {
         #[command(subcommand)]
         command: runtime::RuntimeCommands,
     },
+
+    /// Check for broken symlinks, missing deps, corrupt files
+    Doctor {
+        /// Also verify SHA256 hashes (slow for large files)
+        #[arg(long)]
+        verify_hashes: bool,
+    },
+
+    /// View or update configuration (e.g., storage.root, gpu.vram_mb)
+    Config {
+        /// Config key to view or set (e.g., storage.root)
+        key: Option<String>,
+        /// New value (required when setting a key)
+        value: Option<String>,
+    },
+
+    /// Configure authentication (HuggingFace, Civitai)
+    Auth {
+        /// Auth provider: huggingface or civitai
+        provider: String,
+    },
+
+    /// Update mods CLI to the latest release
+    Upgrade,
+
+    /// Dump CLI schema as JSON (for docs generation)
+    #[command(hide = true)]
+    CliSchema,
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::Init => init::run().await,
-        Commands::Install {
+        Commands::Model { command } => run_model(command).await,
+        Commands::Train {
+            command,
+            dataset,
+            base,
+            name,
+            trigger,
+            preset,
+            steps,
+            config,
+            dry_run,
+        } => match command {
+            Some(TrainSubcommands::Setup { reinstall }) => train_setup::run(reinstall).await,
+            None => {
+                train::run(
+                    dataset.as_deref(),
+                    base.as_deref(),
+                    name.as_deref(),
+                    trigger.as_deref(),
+                    preset.as_deref(),
+                    steps,
+                    config.as_deref(),
+                    dry_run,
+                )
+                .await
+            }
+        },
+        Commands::Dataset { command } => datasets::run(command).await,
+        Commands::Runtime { command } => runtime::run(command).await,
+        Commands::Doctor { verify_hashes } => doctor::run(verify_hashes).await,
+        Commands::Config { key, value } => config::run(key.as_deref(), value.as_deref()).await,
+        Commands::Auth { provider } => auth::run(&provider).await,
+        Commands::Upgrade => upgrade::run().await,
+        Commands::CliSchema => {
+            dump_cli_schema();
+            Ok(())
+        }
+    }
+}
+
+async fn run_model(command: ModelCommands) -> Result<()> {
+    match command {
+        ModelCommands::Pull {
             id,
             variant,
             dry_run,
             force,
         } => install::run(&id, variant.as_deref(), dry_run, force).await,
-        Commands::Uninstall { id, force } => uninstall::run(&id, force).await,
-        Commands::List { r#type } => list::run(r#type.as_deref()).await,
-        Commands::Info { id } => info::run(&id).await,
-        Commands::Search {
+        ModelCommands::Rm { id, force } => uninstall::run(&id, force).await,
+        ModelCommands::Ls { r#type } => list::run(r#type.as_deref()).await,
+        ModelCommands::Info { id } => info::run(&id).await,
+        ModelCommands::Search {
             query,
             r#type,
             r#for,
@@ -239,63 +296,66 @@ pub async fn run(cli: Cli) -> Result<()> {
             )
             .await
         }
-        Commands::Config { key, value } => config::run(key.as_deref(), value.as_deref()).await,
-        Commands::Space => space::run().await,
-        Commands::Doctor { verify_hashes } => doctor::run(verify_hashes).await,
-        Commands::Gc => gc::run().await,
-        Commands::Link { comfyui, a1111 } => link::run(comfyui.as_deref(), a1111.as_deref()).await,
-        Commands::Auth { provider } => auth::run(&provider).await,
-        Commands::Update => update::run().await,
-        Commands::Upgrade => upgrade::run().await,
-        Commands::Export => export::run().await,
-        Commands::Import { path } => import::run(&path).await,
-        Commands::CliSchema => {
-            dump_cli_schema();
-            Ok(())
-        }
-        Commands::Popular {
+        ModelCommands::Popular {
             r#type,
             r#for,
             period,
         } => popular::run(r#type.as_deref(), r#for.as_deref(), &period).await,
-        Commands::Train {
-            dataset,
-            base,
-            name,
-            trigger,
-            preset,
-            steps,
-            config,
-            dry_run,
-        } => {
-            train::run(
-                dataset.as_deref(),
-                base.as_deref(),
-                name.as_deref(),
-                trigger.as_deref(),
-                preset.as_deref(),
-                steps,
-                config.as_deref(),
-                dry_run,
-            )
-            .await
+        ModelCommands::Link { comfyui, a1111 } => {
+            link::run(comfyui.as_deref(), a1111.as_deref()).await
         }
-        Commands::TrainSetup { reinstall } => train_setup::run(reinstall).await,
-        Commands::Datasets { command } => datasets::run(command).await,
-        Commands::Runtime { command } => runtime::run(command).await,
+        ModelCommands::Update => update::run().await,
+        ModelCommands::Space => space::run().await,
+        ModelCommands::Gc => gc::run().await,
+        ModelCommands::Export => export::run().await,
+        ModelCommands::Import { path } => import::run(&path).await,
     }
 }
 
 fn dump_cli_schema() {
     let cmd = Cli::command();
     let mut commands = Vec::new();
+    collect_schema_commands(&cmd, "", &mut commands);
 
+    let schema = serde_json::json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "commands": commands,
+    });
+
+    println!("{}", serde_json::to_string_pretty(&schema).unwrap());
+}
+
+fn collect_schema_commands(
+    cmd: &clap::Command,
+    prefix: &str,
+    commands: &mut Vec<serde_json::Value>,
+) {
     for sub in cmd.get_subcommands() {
         if sub.is_hide_set() {
             continue;
         }
 
-        let name = sub.get_name().to_string();
+        let full_name = if prefix.is_empty() {
+            sub.get_name().to_string()
+        } else {
+            format!("{prefix} {}", sub.get_name())
+        };
+
+        let has_subcommands = sub.get_subcommands().any(|s| !s.is_hide_set());
+
+        // Recurse into nested subcommands
+        if has_subcommands {
+            collect_schema_commands(sub, &full_name, commands);
+
+            // If the command also has its own args (e.g. `train`), emit it too
+            let has_own_args = sub
+                .get_arguments()
+                .any(|a| a.get_id() != "help" && a.get_id() != "version");
+            if !has_own_args {
+                continue;
+            }
+        }
+
         let description = sub.get_about().map(|s| s.to_string()).unwrap_or_default();
 
         let mut args = Vec::new();
@@ -352,7 +412,7 @@ fn dump_cli_schema() {
 
         // Build usage string
         let usage = {
-            let mut parts = vec![format!("mods {name}")];
+            let mut parts = vec![format!("mods {full_name}")];
             for a in &args {
                 let n = a["name"].as_str().unwrap();
                 if a["required"].as_bool().unwrap_or(false) {
@@ -368,18 +428,11 @@ fn dump_cli_schema() {
         };
 
         commands.push(serde_json::json!({
-            "name": name,
+            "name": full_name,
             "description": description,
             "usage": usage,
             "args": args,
             "flags": flags,
         }));
     }
-
-    let schema = serde_json::json!({
-        "version": env!("CARGO_PKG_VERSION"),
-        "commands": commands,
-    });
-
-    println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
