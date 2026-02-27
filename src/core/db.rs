@@ -426,6 +426,17 @@ impl Database {
         rows.collect::<std::result::Result<Vec<_>, _>>()
             .context("Failed to collect artifact results")
     }
+
+    /// Delete an artifact record by artifact_id
+    pub fn delete_artifact(&self, artifact_id: &str) -> Result<()> {
+        self.conn
+            .execute(
+                "DELETE FROM artifacts WHERE artifact_id = ?1",
+                params![artifact_id],
+            )
+            .context("Failed to delete artifact")?;
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
