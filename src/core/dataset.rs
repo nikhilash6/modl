@@ -31,10 +31,17 @@ fn datasets_root() -> PathBuf {
         .join("datasets")
 }
 
-/// Create a managed dataset by copying/symlinking images from a source directory.
+/// Create a managed dataset by copying images from a source directory.
 ///
 /// Copies images matching valid extensions from `from_dir` into
 /// `~/.mods/datasets/<name>/`, along with any paired `.txt` caption files.
+///
+/// Supports **recursive** scanning: if the source has subfolders (e.g. `happy/`,
+/// `sad/`), images inside them are collected and the subfolder name is used as a
+/// tag prefix in auto-generated captions (written as `<subfolder> — <original caption>`
+/// when a caption exists, or just `<subfolder>` when it doesn't). Files are
+/// flattened into the destination with a `<subfolder>_` prefix to avoid name
+/// collisions.
 pub fn create(name: &str, from_dir: &Path) -> Result<DatasetInfo> {
     if !from_dir.exists() {
         bail!("Source directory does not exist: {}", from_dir.display());
@@ -51,36 +58,24 @@ pub fn create(name: &str, from_dir: &Path) -> Result<DatasetInfo> {
     std::fs::create_dir_all(&dest)
         .with_context(|| format!("Failed to create dataset directory: {}", dest.display()))?;
 
-    // Scan source for valid images
-    let entries = std::fs::read_dir(from_dir)
-        .with_context(|| format!("Failed to read source directory: {}", from_dir.display()))?;
-
     let mut copied = 0u32;
-    for entry in entries {
-        let entry = entry?;
-        let src_path = entry.path();
 
-        if !src_path.is_file() {
-            continue;
-        }
+    // Collect (src_image_path, subfolder_tag_option) pairs
+    let mut sources: Vec<(PathBuf, Option<String>)> = Vec::new();
+    collect_images_recursive(from_dir, from_dir, &mut sources)?;
 
-        let ext = src_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase());
+    for (src_path, tag) in &sources {
+        let raw_name = src_path.file_name().unwrap().to_string_lossy().to_string();
 
-        let is_image = ext
-            .as_deref()
-            .is_some_and(|e| VALID_EXTENSIONS.contains(&e));
+        // Flatten subfolder images with a prefix to avoid collisions
+        let dest_name = if let Some(t) = tag {
+            format!("{}_{}", t, raw_name)
+        } else {
+            raw_name.clone()
+        };
+        let dest_file = dest.join(&dest_name);
 
-        if !is_image {
-            continue;
-        }
-
-        let file_name = src_path.file_name().unwrap();
-        let dest_file = dest.join(file_name);
-
-        std::fs::copy(&src_path, &dest_file).with_context(|| {
+        std::fs::copy(src_path, &dest_file).with_context(|| {
             format!(
                 "Failed to copy {} → {}",
                 src_path.display(),
@@ -89,22 +84,31 @@ pub fn create(name: &str, from_dir: &Path) -> Result<DatasetInfo> {
         })?;
         copied += 1;
 
-        // Copy paired .txt caption if it exists
+        // Copy or synthesize caption
         let caption_src = src_path.with_extension("txt");
+        let caption_dest = dest_file.with_extension("txt");
+
         if caption_src.exists() {
-            let caption_dest = dest_file.with_extension("txt");
-            std::fs::copy(&caption_src, &caption_dest).with_context(|| {
-                format!(
-                    "Failed to copy caption {} → {}",
-                    caption_src.display(),
-                    caption_dest.display()
-                )
-            })?;
+            let original = std::fs::read_to_string(&caption_src)
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            let caption = if let Some(t) = tag {
+                format!("{t}, {original}")
+            } else {
+                original
+            };
+            std::fs::write(&caption_dest, &caption)
+                .with_context(|| format!("Failed to write caption: {}", caption_dest.display()))?;
+        } else if let Some(t) = tag {
+            // No existing caption — seed with the subfolder tag so there's
+            // at least a label for training.
+            std::fs::write(&caption_dest, t)
+                .with_context(|| format!("Failed to write caption: {}", caption_dest.display()))?;
         }
     }
 
     if copied == 0 {
-        // Clean up empty directory
         let _ = std::fs::remove_dir(&dest);
         bail!(
             "No valid images found in {}. Expected jpg, jpeg, or png files.",
@@ -113,6 +117,51 @@ pub fn create(name: &str, from_dir: &Path) -> Result<DatasetInfo> {
     }
 
     scan(&dest)
+}
+
+/// Recursively collect images from `dir`, tracking the subfolder tag
+/// (relative to `root`). Top-level images get `tag = None`.
+fn collect_images_recursive(
+    root: &Path,
+    dir: &Path,
+    out: &mut Vec<(PathBuf, Option<String>)>,
+) -> Result<()> {
+    let entries = std::fs::read_dir(dir)
+        .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
+
+    let tag = if dir == root {
+        None
+    } else {
+        dir.file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
+    };
+
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            // Skip hidden directories and cache dirs
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if name.starts_with('.') || name.starts_with('_') {
+                continue;
+            }
+            collect_images_recursive(root, &path, out)?;
+        } else if path.is_file() {
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_lowercase());
+            if ext
+                .as_deref()
+                .is_some_and(|e| VALID_EXTENSIONS.contains(&e))
+            {
+                out.push((path, tag.clone()));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Scan a dataset directory and return stats + image entries.

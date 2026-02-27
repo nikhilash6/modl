@@ -43,6 +43,56 @@ fn default_caption_model() -> String {
     "florence-2".to_string()
 }
 
+fn default_tag_model() -> String {
+    "florence-2".to_string()
+}
+
+fn default_resize_resolution() -> u32 {
+    1024
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagJobSpec {
+    pub dataset_path: String,
+    #[serde(default = "default_tag_model")]
+    pub model: String,
+    #[serde(default)]
+    pub overwrite: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResizeJobSpec {
+    pub dataset_path: String,
+    #[serde(default = "default_resize_resolution")]
+    pub resolution: u32,
+    /// "cover" (crop to fill, default), "contain" (fit inside, pad), or "squish" (stretch)
+    #[serde(default = "default_resize_method")]
+    pub method: String,
+}
+
+fn default_resize_method() -> String {
+    "contain".to_string()
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrepareJobSpec {
+    pub source_dir: String,
+    pub dataset_name: String,
+    #[serde(default = "default_resize_resolution")]
+    pub resolution: u32,
+    #[serde(default = "default_tag_model")]
+    pub tag_model: String,
+    #[serde(default = "default_caption_model")]
+    pub caption_model: String,
+    #[serde(default)]
+    pub skip_resize: bool,
+    #[serde(default)]
+    pub skip_tag: bool,
+    #[serde(default)]
+    pub skip_caption: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoraRef {
     pub name: String,
