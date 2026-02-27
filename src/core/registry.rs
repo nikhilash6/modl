@@ -10,6 +10,16 @@ use super::manifest::Manifest;
 pub struct RegistryIndex {
     #[serde(default)]
     pub version: u32,
+    #[serde(default)]
+    pub generated_at: Option<String>,
+    #[serde(default)]
+    pub total_count: Option<u32>,
+    #[serde(default)]
+    pub type_counts: Option<std::collections::HashMap<String, u32>>,
+    #[serde(default)]
+    pub cloud_available_count: Option<u32>,
+    #[serde(default)]
+    pub schema_url: Option<String>,
     pub items: Vec<Manifest>,
 }
 

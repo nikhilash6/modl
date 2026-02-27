@@ -78,7 +78,15 @@ mod tests {
     use crate::core::manifest::{AssetType, Dependency, Manifest};
 
     fn make_index(items: Vec<Manifest>) -> RegistryIndex {
-        RegistryIndex { version: 1, items }
+        RegistryIndex {
+            version: 2,
+            generated_at: None,
+            total_count: None,
+            type_counts: None,
+            cloud_available_count: None,
+            schema_url: None,
+            items,
+        }
     }
 
     fn simple_manifest(id: &str, deps: Vec<(&str, AssetType)>) -> Manifest {
@@ -111,6 +119,14 @@ mod tests {
             preprocessor: None,
             scale_factor: None,
             clip_vision_model: None,
+            cloud_available: false,
+            cloud_training: None,
+            cloud_inference: None,
+            category: None,
+            training_details: None,
+            sample_images: vec![],
+            recipe: None,
+            publisher: None,
             preview_images: vec![],
             tags: vec![],
             rating: None,
