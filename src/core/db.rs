@@ -361,6 +361,49 @@ impl Database {
         Ok(())
     }
 
+    /// Find an artifact by name or artifact_id.
+    ///
+    /// Matches exact artifact_id first, then tries matching by LoRA name
+    /// (the middle segment of `train:<name>:<hash>` artifact IDs).
+    pub fn find_artifact(&self, query: &str) -> Result<Option<ArtifactRecord>> {
+        // Exact match first
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT artifact_id, job_id, kind, path, sha256, size_bytes, metadata, created_at
+             FROM artifacts WHERE artifact_id = ?1",
+            )
+            .context("Failed to prepare query")?;
+
+        let mut rows = stmt
+            .query_map(params![query], ArtifactRecord::from_row)
+            .context("Failed to query artifact")?;
+
+        if let Some(Ok(record)) = rows.next() {
+            return Ok(Some(record));
+        }
+
+        // Fuzzy match: look for artifacts whose ID contains the query as the name segment
+        let pattern = format!("train:{}:%", query);
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT artifact_id, job_id, kind, path, sha256, size_bytes, metadata, created_at
+             FROM artifacts WHERE artifact_id LIKE ?1 ORDER BY created_at DESC LIMIT 1",
+            )
+            .context("Failed to prepare query")?;
+
+        let mut rows = stmt
+            .query_map(params![pattern], ArtifactRecord::from_row)
+            .context("Failed to query artifact by name")?;
+
+        match rows.next() {
+            Some(Ok(record)) => Ok(Some(record)),
+            Some(Err(e)) => Err(e.into()),
+            None => Ok(None),
+        }
+    }
+
     /// List artifacts, optionally filtered by job_id
     #[allow(dead_code)]
     pub fn list_artifacts(&self, job_id: Option<&str>) -> Result<Vec<ArtifactRecord>> {
