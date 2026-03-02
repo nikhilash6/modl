@@ -226,6 +226,7 @@ mod tests {
                 batch_size: 0,
                 num_repeats: 0,
                 caption_dropout_rate: -1.0,
+                resume_from: None,
             },
             runtime: crate::core::job::RuntimeRef {
                 profile: "trainer-cu124".into(),

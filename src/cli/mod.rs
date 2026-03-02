@@ -219,8 +219,8 @@ pub enum Commands {
         #[arg(long)]
         dataset: Option<String>,
         /// Base model id (e.g. flux-dev, sdxl-base-1.0)
-        #[arg(long)]
-        base: String,
+        #[arg(long, required_unless_present = "command")]
+        base: Option<String>,
         /// Output LoRA name
         #[arg(long)]
         name: Option<String>,
@@ -228,8 +228,13 @@ pub enum Commands {
         #[arg(long)]
         trigger: Option<String>,
         /// LoRA type: style, character, object
-        #[arg(long, value_enum, rename_all = "snake_case")]
-        lora_type: LoraType,
+        #[arg(
+            long,
+            value_enum,
+            rename_all = "snake_case",
+            required_unless_present = "command"
+        )]
+        lora_type: Option<LoraType>,
         /// Training preset: quick, standard, advanced
         #[arg(long, value_enum)]
         preset: Option<Preset>,
@@ -260,6 +265,9 @@ pub enum Commands {
         /// Caption dropout rate (0.0-1.0, higher = learn style over content)
         #[arg(long)]
         caption_dropout: Option<f64>,
+        /// Resume from a checkpoint .safetensors file
+        #[arg(long)]
+        resume: Option<String>,
         /// Load a full TrainJobSpec YAML (escape hatch)
         #[arg(long)]
         config: Option<String>,
@@ -386,6 +394,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             seed,
             repeats,
             caption_dropout,
+            resume,
             config,
             dry_run,
             cloud,
@@ -397,12 +406,14 @@ pub async fn run(cli: Cli) -> Result<()> {
                 Ok(())
             }
             None => {
+                let base_val = base.as_deref().expect("--base is required for training");
+                let lora_type_val = lora_type.expect("--lora-type is required for training");
                 train::run(
                     dataset.as_deref(),
-                    &base,
+                    base_val,
                     name.as_deref(),
                     trigger.as_deref(),
-                    lora_type,
+                    lora_type_val,
                     preset,
                     train::TrainOverrides {
                         steps,
@@ -414,6 +425,7 @@ pub async fn run(cli: Cli) -> Result<()> {
                         seed,
                         repeats,
                         caption_dropout,
+                        resume,
                     },
                     config.as_deref(),
                     dry_run,

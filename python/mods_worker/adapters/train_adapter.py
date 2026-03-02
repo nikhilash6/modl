@@ -235,6 +235,12 @@ def spec_to_aitoolkit_config(spec: dict) -> dict:
         "linear_alpha": rank,
     }
 
+    # Resume from a previous checkpoint if specified
+    resume_from = params.get("resume_from")
+    if resume_from:
+        network_config["pretrained_lora_path"] = resume_from
+        print(f"[mods] Resuming training from checkpoint: {resume_from}")
+
     # Style defaults: more repeats + higher caption dropout to learn style over content.
     # A value of 0 (num_repeats) or <0 (caption_dropout) means "use adapter default".
     num_repeats = params.get("num_repeats", 0)
@@ -353,7 +359,9 @@ def run_train(config_path: Path, emitter: EventEmitter) -> int:
             effective_config_path = config_path
     except ImportError:
         effective_config_path = config_path
-    except Exception:
+    except Exception as e:
+        print(f"[mods] WARNING: spec translation failed: {e}", file=sys.stderr)
+        import traceback; traceback.print_exc(file=sys.stderr)
         effective_config_path = config_path
 
     # Build the ai-toolkit command.

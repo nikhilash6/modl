@@ -113,6 +113,7 @@ pub fn resolve_params(
         batch_size: 0,              // 0 = let adapter choose per lora_type
         num_repeats: 0,             // 0 = let adapter choose per lora_type
         caption_dropout_rate: -1.0, // negative = let adapter choose
+        resume_from: None,
     }
 }
 

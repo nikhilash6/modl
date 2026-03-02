@@ -67,7 +67,7 @@ pub fn get_all_status(active_only: bool) -> Result<Vec<TrainingProgress>> {
         let name = entry.file_name().to_string_lossy().to_string();
         let log_path = output_dir.join(format!("{name}.log"));
 
-        let is_running = running_configs.iter().any(|c| c.contains(&name));
+        let is_running = running_configs.iter().any(|c| c == &name);
 
         if active_only && !is_running {
             // Also include recently-active logs (modified in last 60s)
@@ -111,7 +111,7 @@ pub fn get_status(name: &str) -> Result<TrainingProgress> {
     let running_configs = find_running_training_configs();
 
     let mut progress = parse_log_progress(name, &log_path);
-    progress.is_running = running_configs.iter().any(|c| c.contains(name));
+    progress.is_running = running_configs.iter().any(|c| c == name);
 
     if let Some(config) = load_run_config(name) {
         progress.arch = config.arch;
@@ -361,7 +361,9 @@ fn read_tail(path: &Path, max_bytes: u64) -> String {
 // Process detection
 // ---------------------------------------------------------------------------
 
-/// Find running `python run.py <config>` processes and return their config paths.
+/// Find running `python run.py <config>` processes and return the run names
+/// they are training. We read each config file to extract the run name since
+/// the process may use a temp file path (e.g. /tmp/tmpXXXXXX.yaml).
 fn find_running_training_configs() -> Vec<String> {
     let output = std::process::Command::new("ps")
         .args(["ax", "-o", "args="])
@@ -373,20 +375,57 @@ fn find_running_training_configs() -> Vec<String> {
     };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut configs = Vec::new();
+    let mut names = Vec::new();
 
     for line in stdout.lines() {
         let trimmed = line.trim();
         // Match: python run.py <config_path>
-        // or: python -m mods_worker.main train --config <path>
-        if (trimmed.contains("run.py") || trimmed.contains("mods_worker"))
-            && trimmed.contains("training_output")
-        {
-            configs.push(trimmed.to_string());
+        if !trimmed.contains("run.py") && !trimmed.contains("mods_worker") {
+            continue;
+        }
+
+        // Extract the config path (last arg that ends in .yaml/.yml)
+        let config_path = trimmed
+            .split_whitespace()
+            .last()
+            .filter(|a| a.ends_with(".yaml") || a.ends_with(".yml"));
+
+        if let Some(path) = config_path {
+            // Try to read the config and extract the run name
+            if let Ok(contents) = std::fs::read_to_string(path) {
+                // Look for "name: <run_name>" in the YAML
+                for cfg_line in contents.lines() {
+                    let cfg_trimmed = cfg_line.trim();
+                    if let Some(name) = cfg_trimmed.strip_prefix("name:") {
+                        let run_name = name.trim().trim_matches('"').trim_matches('\'');
+                        if !run_name.is_empty() {
+                            names.push(run_name.to_string());
+                            break;
+                        }
+                    }
+                }
+                // Also check training_folder for the run name
+                for cfg_line in contents.lines() {
+                    let cfg_trimmed = cfg_line.trim();
+                    if let Some(folder) = cfg_trimmed.strip_prefix("training_folder:") {
+                        let folder = folder.trim().trim_matches('"').trim_matches('\'');
+                        if let Some(name) = folder.rsplit('/').next()
+                            && !name.is_empty()
+                            && !names.contains(&name.to_string())
+                        {
+                            names.push(name.to_string());
+                        }
+                    }
+                }
+            }
+            // Fallback: if the path itself contains training_output, extract name
+            if names.is_empty() && trimmed.contains("training_output") {
+                names.push(trimmed.to_string());
+            }
         }
     }
 
-    configs
+    names
 }
 
 // ---------------------------------------------------------------------------

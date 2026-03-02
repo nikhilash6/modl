@@ -23,6 +23,7 @@ pub struct TrainOverrides {
     pub seed: Option<u64>,
     pub repeats: Option<u32>,
     pub caption_dropout: Option<f64>,
+    pub resume: Option<String>,
 }
 
 /// Run the train command. Arguments are all optional; missing ones trigger
@@ -221,6 +222,9 @@ pub async fn run(
     }
     if let Some(cd) = overrides.caption_dropout {
         params.caption_dropout_rate = cd; // -1.0 = let adapter decide
+    }
+    if overrides.resume.is_some() {
+        params.resume_from = overrides.resume;
     }
 
     // -------------------------------------------------------------------

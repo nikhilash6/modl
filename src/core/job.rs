@@ -176,6 +176,9 @@ pub struct TrainingParams {
     /// Probability of dropping captions (higher = learn visual style over text)
     #[serde(default = "default_caption_dropout")]
     pub caption_dropout_rate: f64,
+    /// Resume training from a checkpoint .safetensors file
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resume_from: Option<String>,
 }
 
 fn default_batch_size() -> u32 {
@@ -457,6 +460,7 @@ mod tests {
                 batch_size: 0,
                 num_repeats: 0,
                 caption_dropout_rate: -1.0,
+                resume_from: None,
             },
             runtime: RuntimeRef {
                 profile: "trainer-cu124".into(),
