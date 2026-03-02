@@ -163,20 +163,6 @@ fn infer_prompt_count(images: &[String]) -> usize {
     }
 }
 
-/// Extract the minimum timestamp prefix from a set of sample image paths.
-/// Filename pattern: `<timestamp>__<step>_<idx>.jpg`
-fn extract_timestamp(images: &[String]) -> u64 {
-    images
-        .iter()
-        .filter_map(|img| {
-            let fname = img.rsplit('/').next()?;
-            let ts_str = fname.split("__").next()?;
-            ts_str.parse::<u64>().ok()
-        })
-        .min()
-        .unwrap_or(0)
-}
-
 /// Scan a training output directory for sample images grouped by step
 fn scan_training_run(name: &str) -> Result<TrainingRun> {
     let run_dir = mods_root().join("training_output").join(name).join(name);
@@ -221,38 +207,23 @@ fn scan_training_run(name: &str) -> Result<TrainingRun> {
         .map(|(step, mut images)| {
             images.sort();
             // When a run is resumed, the same step (especially step 0) may have
-            // duplicate samples from both the original and resumed runs.  Keep
-            // only the latest batch (highest timestamp prefix) so the evolution
-            // grid stays aligned.
+            // duplicate samples from both the original and resumed runs.
             let expected = infer_prompt_count(&images);
             if images.len() > expected && expected > 0 {
-                // Images are sorted by filename (timestamp prefix first), so
-                // the *last* `expected` entries are from the most recent run.
-                images = images.split_off(images.len() - expected);
+                if step == 0 {
+                    // Step 0: keep the *first* batch (original run) — the
+                    // resumed run's step 0 is visually identical to the last
+                    // checkpoint and adds no information.
+                    images.truncate(expected);
+                } else {
+                    // Other steps: keep the *last* batch (most recent run).
+                    images = images.split_off(images.len() - expected);
+                }
             }
             SampleGroup { step, images }
         })
         .collect();
     samples.sort_by_key(|s| s.step);
-
-    // When training is resumed, ai-toolkit generates new step-0 samples
-    // that are visually identical to the last checkpoint of the prior run
-    // (since the model state hasn't changed yet).  Detect this and remove
-    // the redundant step-0 to avoid a confusing "duplicate" in the grid.
-    if samples.len() >= 2
-        && let Some(step0_pos) = samples.iter().position(|s| s.step == 0)
-    {
-        let step0_ts = extract_timestamp(&samples[step0_pos].images);
-        // Find the highest-step sample that has a *lower* timestamp
-        // (i.e. from the original run).  If step 0's timestamp is
-        // higher, it was re-generated on resume and is redundant.
-        let has_earlier_higher_step = samples
-            .iter()
-            .any(|s| s.step > 0 && extract_timestamp(&s.images) < step0_ts && step0_ts > 0);
-        if has_earlier_higher_step {
-            samples.remove(step0_pos);
-        }
-    }
 
     // Check for final LoRA
     let lora_path = run_dir.join(format!("{name}.safetensors"));

@@ -291,21 +291,26 @@ function renderStatusBanner(r) {
 
 // ---- Training Runs ----
 async function loadRuns() {
-  const res = await fetch('/api/runs');
-  const runs = await res.json();
-  const list = document.getElementById('runs-list');
+  try {
+    const res = await fetch('/api/runs');
+    const runs = await res.json();
+    const list = document.getElementById('runs-list');
 
-  if (runs.length === 0) {
-    list.innerHTML = '<li class="loading">No training runs found</li>';
-    return;
+    if (runs.length === 0) {
+      list.innerHTML = '<li class="loading">No training runs found</li>';
+      return;
+    }
+
+    list.innerHTML = runs.map(name =>
+      `<li onclick="selectRun('${name}')" id="run-${name}">${name}</li>`
+    ).join('');
+
+    // Auto-select last run
+    selectRun(runs[runs.length - 1]);
+  } catch (e) {
+    document.getElementById('runs-list').innerHTML = '<li class="loading">Failed to load — retrying...</li>';
+    setTimeout(loadRuns, 2000);
   }
-
-  list.innerHTML = runs.map(name =>
-    `<li onclick="selectRun('${name}')" id="run-${name}">${name}</li>`
-  ).join('');
-
-  // Auto-select last run
-  selectRun(runs[runs.length - 1]);
 }
 
 async function selectRun(name) {
@@ -528,6 +533,7 @@ function escapeHtml(str) {
 // Auto-refresh: poll status every 1s, re-check run samples every 15s
 let statusInterval = null;
 let samplesInterval = null;
+let lastSampleCount = 0;
 
 function startAutoRefresh() {
   // Status banner: realtime (local, surgical DOM update)
