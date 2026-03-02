@@ -30,10 +30,10 @@ pub struct TrainOverrides {
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
     dataset_arg: Option<&str>,
-    base: Option<&str>,
+    base: &str,
     name: Option<&str>,
     trigger: Option<&str>,
-    lora_type_arg: Option<LoraType>,
+    lora_type: LoraType,
     preset_arg: Option<Preset>,
     overrides: TrainOverrides,
     config: Option<&str>,
@@ -105,21 +105,9 @@ pub async fn run(
     }
 
     // -------------------------------------------------------------------
-    // Resolve base model
+    // Base model (required CLI arg)
     // -------------------------------------------------------------------
-    let base_model = match base {
-        Some(b) => b.to_string(),
-        None => {
-            let models = &["flux-dev", "flux-schnell", "sdxl-base-1.0", "sdxl-turbo"];
-            let selection = dialoguer::Select::new()
-                .with_prompt("Base model")
-                .items(models)
-                .default(1)
-                .interact()
-                .context("Base model selection cancelled")?;
-            models[selection].to_string()
-        }
-    };
+    let base_model = base.to_string();
 
     // -------------------------------------------------------------------
     // Resolve trigger word
@@ -148,30 +136,8 @@ pub async fn run(
         }
     };
 
+    // LoRA type (required CLI arg)
     // -------------------------------------------------------------------
-    // Resolve LoRA type (style, character, object)
-    // -------------------------------------------------------------------
-    let lora_type = match lora_type_arg {
-        Some(t) => t,
-        None => {
-            let types = &[
-                "Style (art style, visual aesthetic)",
-                "Character (person, face)",
-                "Object (item, concept)",
-            ];
-            let selection = dialoguer::Select::new()
-                .with_prompt("LoRA type")
-                .items(types)
-                .default(0)
-                .interact()
-                .context("LoRA type selection cancelled")?;
-            match selection {
-                0 => LoraType::Style,
-                1 => LoraType::Character,
-                _ => LoraType::Object,
-            }
-        }
-    };
 
     // -------------------------------------------------------------------
     // Resolve preset

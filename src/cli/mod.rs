@@ -218,9 +218,9 @@ pub enum Commands {
         /// Dataset name or directory path
         #[arg(long)]
         dataset: Option<String>,
-        /// Base model id (e.g. flux-schnell, flux-dev)
+        /// Base model id (e.g. flux-dev, sdxl-base-1.0)
         #[arg(long)]
-        base: Option<String>,
+        base: String,
         /// Output LoRA name
         #[arg(long)]
         name: Option<String>,
@@ -229,7 +229,7 @@ pub enum Commands {
         trigger: Option<String>,
         /// LoRA type: style, character, object
         #[arg(long, value_enum, rename_all = "snake_case")]
-        lora_type: Option<LoraType>,
+        lora_type: LoraType,
         /// Training preset: quick, standard, advanced
         #[arg(long, value_enum)]
         preset: Option<Preset>,
@@ -399,7 +399,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             None => {
                 train::run(
                     dataset.as_deref(),
-                    base.as_deref(),
+                    &base,
                     name.as_deref(),
                     trigger.as_deref(),
                     lora_type,
