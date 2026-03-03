@@ -53,7 +53,7 @@ async fn configure_huggingface() -> Result<()> {
                 style("!").yellow(),
                 e
             );
-            println!("  Saving anyway — you can re-run `mods auth huggingface` later.");
+            println!("  Saving anyway — you can re-run `modl auth huggingface` later.");
         }
     }
 
@@ -64,7 +64,7 @@ async fn configure_huggingface() -> Result<()> {
     println!(
         "{} HuggingFace auth saved to {}",
         style("✓").green(),
-        style("~/.mods/auth.yaml").dim()
+        style("~/.modl/auth.yaml").dim()
     );
 
     Ok(())
@@ -109,7 +109,7 @@ async fn configure_civitai() -> Result<()> {
     println!(
         "{} Civitai auth saved to {}",
         style("✓").green(),
-        style("~/.mods/auth.yaml").dim()
+        style("~/.modl/auth.yaml").dim()
     );
 
     Ok(())

@@ -5,25 +5,25 @@
 > **STATUS:** Phase 1 (Executor trait + CloudExecutor stub) done. Phases 2-5 (API, Modal backend, CloudExecutor impl, polish) not started.
 > Related specs: [execution-target.md](../specs/execution-target.md), [capability-model.md](capability-model.md)
 
-## Business Model: mods cloud as a Product Layer
+## Business Model: modl cloud as a Product Layer
 
-**Key decision: users never interact with Modal directly.** `mods --cloud` is a paid
-mods feature, not a passthrough to a GPU provider.
+**Key decision: users never interact with Modal directly.** `modl --cloud` is a paid
+modl feature, not a passthrough to a GPU provider.
 
 ```
-User → mods CLI → mods API (api.getmods.dev) → Modal (backend, invisible to user)
+User → modl CLI → modl API (api.modl.run) → Modal (backend, invisible to user)
 ```
 
 ### Why This Matters
 
-If users bring their own Modal key, mods is a free tool with zero revenue.
-By owning the API layer, mods controls:
+If users bring their own Modal key, modl is a free tool with zero revenue.
+By owning the API layer, modl controls:
 
 - **Pricing** — per-job or subscription, with margin on compute
-- **UX** — one login (`mods cloud login`), no cloud provider setup
+- **UX** — one login (`modl cloud login`), no cloud provider setup
 - **Portability** — swap Modal for RunPod/bare-metal without user impact
 - **Quota/limits** — enforce per-account, not per-provider
-- **Model hosting** — mods manages model volumes, users don't think about it
+- **Model hosting** — modl manages model volumes, users don't think about it
 
 ### Pricing Model (MVP)
 
@@ -140,11 +140,11 @@ unknown `base_model_id` values on cloud (local can do anything).
 ┌─────────────────────────────────────────────────────┐
 │  User's machine                                     │
 │                                                     │
-│  mods CLI (Rust)                                    │
-│    ├── mods cloud login        → get mods API key   │
-│    ├── mods cloud status       → check quota/usage  │
-│    ├── mods train --cloud      → submit to API      │
-│    └── mods generate --cloud   → submit to API      │
+│  modl CLI (Rust)                                    │
+│    ├── modl cloud login        → get modl API key   │
+│    ├── modl cloud status       → check quota/usage  │
+│    ├── modl train --cloud      → submit to API      │
+│    └── modl generate --cloud   → submit to API      │
 │                                                     │
 │  Dataset upload: CLI zips + uploads to presigned S3  │
 │  Artifact download: CLI pulls .safetensors from S3   │
@@ -152,9 +152,9 @@ unknown `base_model_id` values on cloud (local can do anything).
                   │ HTTPS (JSON)
                   ▼
 ┌─────────────────────────────────────────────────────┐
-│  mods API (api.getmods.dev)                         │
+│  modl API (api.modl.run)                         │
 │                                                     │
-│  - Auth: mods API keys (not Modal tokens)           │
+│  - Auth: modl API keys (not Modal tokens)           │
 │  - Billing: Stripe, usage metering                  │
 │  - Job queue: accept spec → dispatch to Modal       │
 │  - Status: poll Modal → relay events to CLI         │
@@ -168,7 +168,7 @@ unknown `base_model_id` values on cloud (local can do anything).
 ┌─────────────────────────────────────────────────────┐
 │  Modal (GPU compute backend)                        │
 │                                                     │
-│  Modal App: mods-cloud                              │
+│  Modal App: modl-cloud                              │
 │    ├── train_fn(spec) → run ai-toolkit              │
 │    └── generate_fn(spec) → run diffusers            │
 │                                                     │
@@ -196,7 +196,7 @@ Volume setup (run once, update when adding models):
 
 ```python
 # deploy/modal/volume_setup.py
-vol = modal.Volume.from_name("mods-models", create_if_missing=True)
+vol = modal.Volume.from_name("modl-models", create_if_missing=True)
 
 MODELS = {
     "flux-schnell": "black-forest-labs/FLUX.1-schnell",
@@ -240,12 +240,12 @@ Same `JobEvent` schema, just delivered over HTTP instead of stdout.
 ### New Commands
 
 ```bash
-mods cloud login                    # browser OAuth or paste API key
-mods cloud status                   # account, quota, usage
-mods cloud logout                   # remove stored credentials
+modl cloud login                    # browser OAuth or paste API key
+modl cloud status                   # account, quota, usage
+modl cloud logout                   # remove stored credentials
 
-mods train --cloud                  # submit training to mods cloud
-mods generate --cloud               # submit generation to mods cloud
+modl train --cloud                  # submit training to modl cloud
+modl generate --cloud               # submit generation to modl cloud
 ```
 
 ### CloudExecutor (Rust)
@@ -272,10 +272,10 @@ regardless of whether the executor is local or cloud.
 ### Config
 
 ```yaml
-# ~/.mods/config.yaml
+# ~/.modl/config.yaml
 cloud:
-  api_key: "mods_key_..."          # mods API key, NOT a Modal token
-  api_url: "https://api.getmods.dev"  # overridable for dev/self-host
+  api_key: "mods_key_..."          # modl API key, NOT a Modal token
+  api_url: "https://api.modl.run"  # overridable for dev/self-host
 ```
 
 ---
@@ -286,22 +286,22 @@ Three repos, clear boundaries:
 
 | Repo | Visibility | Deploys to | Purpose |
 |------|-----------|-----------|--------|
-| `mods` | Public | User machines (cargo install / brew) | CLI + local runtime |
-| `mods-api` | Private | Fly.io / Railway | API service: auth, billing, job orchestration, S3 |
-| `mods-gpu` | Private | Modal | GPU functions: training + inference |
+| `modl` | Public | User machines (cargo install / brew) | CLI + local runtime |
+| `modl-api` | Private | Fly.io / Railway | API service: auth, billing, job orchestration, S3 |
+| `modl-gpu` | Private | Modal | GPU functions: training + inference |
 
-### Why Separate `mods-api` and `mods-gpu`
+### Why Separate `modl-api` and `modl-gpu`
 
 - **Different deploy targets**: API goes to a web host, GPU functions go to Modal
 - **Different dependencies**: API needs Postgres/Stripe/S3 SDKs, GPU needs torch/diffusers/ai-toolkit
 - **Different scaling**: API scales horizontally (cheap), GPU scales by Modal's autoscaler
 - **Different change velocity**: API changes for billing/auth, GPU changes for model support
-- **Replaceability**: swap Modal for RunPod by replacing `mods-gpu` only, API untouched
+- **Replaceability**: swap Modal for RunPod by replacing `modl-gpu` only, API untouched
 
-### `mods-api` Structure
+### `modl-api` Structure
 
 ```
-mods-api/
+modl-api/
 ├── src/
 │   ├── main.ts             # entry point
 │   ├── routes/
@@ -325,10 +325,10 @@ mods-api/
 Tech: Node/TypeScript (ships fast, Stripe SDK is excellent, Modal has a REST API).
 Or Go if you prefer — either works for a thin API layer.
 
-### `mods-gpu` Structure
+### `modl-gpu` Structure
 
 ```
-mods-gpu/
+modl-gpu/
 ├── app.py                   # Modal app definition
 ├── image.py                 # Container image builder
 ├── train_fn.py              # @app.function — training
@@ -337,14 +337,14 @@ mods-gpu/
 ├── shared/
 │   ├── spec_translator.py   # TrainJobSpec → ai-toolkit config
 │   ├── s3.py                # Download dataset, upload artifacts
-│   └── events.py            # POST events back to mods-api
+│   └── events.py            # POST events back to modl-api
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## mods API (Server-Side)
+## modl API (Server-Side)
 
 ### Endpoints
 
@@ -381,7 +381,7 @@ CLI submit → API queued → Modal running → Modal completed → API complete
 4. Modal: load pipeline from /models volume, load LoRA if specified
 5. Modal: generate image(s), upload to S3
 6. API: mark complete, return artifact URLs
-7. CLI: download images, save to ~/mods/outputs/
+7. CLI: download images, save to ~/modl/outputs/
 ```
 
 Inference is faster than training (~5-10s per image) so the CLI can
@@ -395,7 +395,7 @@ or downloaded from S3 per-request. Volume is better for repeat usage.
 - API: single service (Node/TypeScript or Go)
 - DB: Postgres (accounts, subscriptions, jobs, events, artifacts, usage)
 - Storage: S3-compatible (dataset uploads, generated images, LoRA artifacts)
-- Auth: API keys (mods-issued), Stripe for billing + subscriptions
+- Auth: API keys (modl-issued), Stripe for billing + subscriptions
 - Deploy: Fly.io or Railway (not Modal — separate your compute from your API)
 
 ---
@@ -447,7 +447,7 @@ def train(spec: dict, dataset_url: str, callback_url: str) -> dict:
 ### Generation Function (Cloud Inference)
 
 ```python
-lora_volume = modal.Volume.from_name("mods-loras", create_if_missing=True)
+lora_volume = modal.Volume.from_name("modl-loras", create_if_missing=True)
 
 @app.function(
     gpu="A10G",           # cheaper GPU for inference (A100 for larger models)
@@ -493,11 +493,11 @@ Volume cleanup: LoRAs unused for 30 days get evicted. S3 is the source of truth.
 - [x] CaptionJobSpec + caption adapter
 - [ ] E2E GPU validation (local)
 
-### Phase 2: mods API
+### Phase 2: modl API
 - [ ] API service scaffold (auth, jobs, events endpoints)
 - [ ] Stripe integration (API key provisioning, usage metering)
 - [ ] S3 bucket setup (dataset uploads, artifact storage)
-- [ ] `mods cloud login` / `mods cloud status` CLI commands
+- [ ] `modl cloud login` / `modl cloud status` CLI commands
 
 ### Phase 3: Modal Backend
 - [ ] Modal app + training image
@@ -514,7 +514,7 @@ Volume cleanup: LoRAs unused for 30 days get evicted. S3 is the source of truth.
 - [ ] Same progress bar UX as local
 
 ### Phase 5: Polish
-- [ ] `mods cloud usage` — billing dashboard in terminal
+- [ ] `modl cloud usage` — billing dashboard in terminal
 - [ ] Job timeout handling + auto-cancel
 - [ ] Retry on transient Modal failures
 - [ ] Rate limiting per account
@@ -527,7 +527,7 @@ Volume cleanup: LoRAs unused for 30 days get evicted. S3 is the source of truth.
   but not at launch. Dilutes the product.
 - **Multi-provider**: RunPod/Replicate as alternative backends. Good to have
   the abstraction, but ship with Modal only.
-- **Self-hosted cloud**: `mods cloud` pointing at user's own infra.
+- **Self-hosted cloud**: `modl cloud` pointing at user's own infra.
   Interesting for enterprise, not for launch.
 - **Fine-tuning beyond LoRA**: full fine-tune, DreamBooth, textual inversion.
   LoRA only at launch.
@@ -548,7 +548,7 @@ Volume cleanup: LoRAs unused for 30 days get evicted. S3 is the source of truth.
 4. **Cold start messaging**: 60-90s is noticeable. UX should show "spinning
    up cloud GPU..." with a progress indicator so it feels intentional, not
    broken. Can note "first image takes longer, subsequent ones are fast."
-5. **Domain**: api.getmods.dev? api.mods.so? Match the marketing site.
+5. **Domain**: api.modl.run? api.modl.so? Match the marketing site.
 6. **Max tier necessity at launch**: maybe launch with just Free + Pro ($20).
    Add Max later when there's demand. Fewer tiers = simpler launch.
 7. **A100 40GB vs 80GB**: flux-schnell and z-image-turbo might train fine

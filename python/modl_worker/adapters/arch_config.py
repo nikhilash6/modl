@@ -26,7 +26,7 @@ import os
 # Character on 24GB: NOT currently recommended. Would need int4 (severe
 #   quality degradation per Ostris) + resolution drop to 512-768.
 #   Ostris: "It currently won't run on 24 gigs, I'm still working on that."
-# Users can override via MODS_QWEN_QTYPE env var.
+# Users can override via MODL_QWEN_QTYPE env var.
 QWEN_32GB_DEFAULT_QTYPE = "uint6"
 QWEN_24GB_STYLE_QTYPE = "uint3|ostris/accuracy_recovery_adapters/qwen_image_torchao_uint3.safetensors"
 
@@ -139,7 +139,7 @@ ARCH_CONFIGS: dict[str, dict] = {
 }
 
 # -----------------------------------------------------------------------
-# Model registry: mods model IDs → (arch_key, HuggingFace hub ID)
+# Model registry: modl model IDs → (arch_key, HuggingFace hub ID)
 # -----------------------------------------------------------------------
 
 MODEL_REGISTRY: dict[str, tuple[str, str]] = {
@@ -191,7 +191,7 @@ def detect_arch(base_model_id: str) -> str:
 
 
 def resolve_model_path(base_model_id: str) -> str:
-    """Resolve a mods model ID to a HuggingFace hub path."""
+    """Resolve a modl model ID to a HuggingFace hub path."""
     entry = MODEL_REGISTRY.get(base_model_id)
     if entry:
         return entry[1]
@@ -212,7 +212,7 @@ def resolve_qwen_qtype(lora_type: str) -> str:
     else:
         default = QWEN_32GB_DEFAULT_QTYPE
 
-    qtype = os.getenv("MODS_QWEN_QTYPE", default).strip()
+    qtype = os.getenv("MODL_QWEN_QTYPE", default).strip()
     if qtype == "int6":
         qtype = "uint6"  # ai-toolkit uses uint* naming
     if not qtype:

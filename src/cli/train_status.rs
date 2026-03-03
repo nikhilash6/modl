@@ -21,7 +21,7 @@ fn run_once(name: Option<&str>) -> Result<()> {
 
     if runs.is_empty() {
         println!(
-            "{} No training runs found in ~/.mods/training_output/",
+            "{} No training runs found in ~/.modl/training_output/",
             style("·").dim()
         );
         return Ok(());
@@ -52,7 +52,7 @@ fn run_watch(name: Option<&str>) -> Result<()> {
             }
         };
 
-        println!("{}\n", style("mods train status").bold().underlined());
+        println!("{}\n", style("modl train status").bold().underlined());
 
         if runs.is_empty() {
             println!("  {} No training runs found.", style("·").dim());

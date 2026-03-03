@@ -1,4 +1,4 @@
-# Mods Runtime — Architecture Proposal
+# Modl Runtime — Architecture Proposal
 
 > **STATUS: ASPIRATIONAL / NOT IMPLEMENTED**
 > This document describes a future product vision (ComfyUI as sidecar engine,
@@ -10,15 +10,15 @@
 
 ComfyUI solves the hard problem (execution engine, model management, node ecosystem) but wraps it in the wrong UX for 2026: spaghetti node graphs that are impossible for LLMs to generate, impossible to version-control, and impossible to deploy. 
 
-**Mods Runtime** keeps ComfyUI's Python execution core (the hard part) but replaces everything above it:
+**Modl Runtime** keeps ComfyUI's Python execution core (the hard part) but replaces everything above it:
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │  NEW: AI Chat UI / YAML Editor / Deploy Platform    │  ← You build this
 ├─────────────────────────────────────────────────────┤
-│  NEW: Mods Runtime Server (Rust)                    │  ← Orchestration layer
+│  NEW: Modl Runtime Server (Rust)                    │  ← Orchestration layer
 │  - YAML workflow parsing + validation               │
-│  - mods.lock dependency resolution                  │
+│  - modl.lock dependency resolution                  │
 │  - Job queue + WebSocket streaming                  │
 │  - Deploy packaging                                 │
 ├─────────────────────────────────────────────────────┤
@@ -28,7 +28,7 @@ ComfyUI solves the hard problem (execution engine, model management, node ecosys
 │  - Model management (VRAM, partial loading)         │
 │  - All existing nodes + custom nodes                │
 ├─────────────────────────────────────────────────────┤
-│  REUSED: mods (model manager)                       │  ← Already built
+│  REUSED: modl (model manager)                       │  ← Already built
 │  - Content-addressed store                          │
 │  - Dependency resolution                            │
 │  - GPU-aware variant selection                      │
@@ -46,7 +46,7 @@ The key insight: **don't rewrite the Python ML runtime** — it's 50K+ lines of 
 1. **LLM-native** — GPT-4/Claude can generate valid YAML trivially; generating ComfyUI's nested JSON-with-positional-arrays is error-prone
 2. **Version-controllable** — clean diffs, mergeable, reviewable
 3. **Human-readable** — a designer can read and tweak parameters without a node editor
-4. **Lockfile-friendly** — YAML composes naturally with `mods.lock`
+4. **Lockfile-friendly** — YAML composes naturally with `modl.lock`
 
 ### Format Design
 
@@ -56,9 +56,9 @@ name: "Flux Portrait Generator"
 version: 1
 description: "High-quality portrait generation with Flux Dev"
 
-# Dependencies — resolved by mods
+# Dependencies — resolved by modl
 requires:
-  - flux-dev          # checkpoint (mods resolves VAE, text encoders automatically)
+  - flux-dev          # checkpoint (modl resolves VAE, text encoders automatically)
   - realistic-skin-v3 # lora
 
 # Input parameters — what the user/API caller provides
@@ -107,7 +107,7 @@ steps:
   load_model:
     node: CheckpointLoaderSimple
     params:
-      ckpt_name: flux-dev        # resolved by mods to actual filename
+      ckpt_name: flux-dev        # resolved by modl to actual filename
 
   apply_lora:
     node: LoraLoader
@@ -161,7 +161,7 @@ steps:
     node: SaveImage
     params:
       images: $decode.image
-      filename_prefix: "mods_output"
+      filename_prefix: "modl_output"
 
 # Outputs — what gets returned to the caller
 outputs:
@@ -209,7 +209,7 @@ Compiles to:
 The compiler:
 1. Resolves `$inputs.*` references to concrete values
 2. Resolves `$step.output` references to `[step_id, output_index]` tuples
-3. Resolves model names (`flux-dev`) to actual filenames via mods registry
+3. Resolves model names (`flux-dev`) to actual filenames via modl registry
 4. Validates types match (using `/object_info` from ComfyUI)
 5. Emits standard ComfyUI prompt JSON
 
@@ -234,7 +234,7 @@ This means **every existing ComfyUI node works day one** — no porting needed.
 └────────────────────────┼──────────────────────────────────┘
                          │
 ┌────────────────────────┼──────────────────────────────────┐
-│              Mods Runtime Server (Rust)                    │
+│              Modl Runtime Server (Rust)                    │
 │                        │                                   │
 │  ┌─────────────────────┴──────────────────────────┐       │
 │  │              API Gateway (axum)                  │       │
@@ -262,7 +262,7 @@ This means **every existing ComfyUI node works day one** — no porting needed.
 │  └─────────────────────────┬───────────────────────────┘   │
 │                            │                               │
 │  ┌─────────────────────────┴───────────────────────────┐   │
-│  │              Mods Core (existing)                    │   │
+│  │              Modl Core (existing)                    │   │
 │  │  - Model resolution (name → file path)              │   │
 │  │  - Dependency checking                              │   │
 │  │  - Variant selection                                │   │
@@ -370,7 +370,7 @@ This is significantly more complex (Python environment management, venv isolatio
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  ⌂ Mods Runtime          [flow: flux-portrait.flow.yaml ▾]  │
+│  ⌂ Modl Runtime          [flow: flux-portrait.flow.yaml ▾]  │
 ├──────────────┬─────────────────────┬────────────────────────┤
 │              │                     │                        │
 │  CHAT        │  WORKFLOW           │  OUTPUT                │
@@ -432,11 +432,11 @@ const tools = {
     parameters: { query: "string" },
   },
   search_models: {
-    description: "Search for models in the mods registry",
+    description: "Search for models in the modl registry",
     parameters: { query: "string", type: "string" },
   },
   install_model: {
-    description: "Install a model via mods",
+    description: "Install a model via modl",
     parameters: { model_id: "string" },
   },
   explain_flow: {
@@ -466,7 +466,7 @@ Monaco editor with custom language support:
 
 ```typescript
 // YAML language features
-const modsYamlLanguage = {
+const modlYamlLanguage = {
   // Autocomplete for node types
   completionProvider: {
     triggerCharacters: ['.', '$', ':'],
@@ -482,7 +482,7 @@ const modsYamlLanguage = {
     async provideHover(position) {
       // Hover over node type → show description, inputs, outputs
       // Hover over $reference → show what it resolves to
-      // Hover over model name → show mods info
+      // Hover over model name → show modl info
     }
   },
   
@@ -526,13 +526,13 @@ const modsYamlLanguage = {
 When the LLM needs to help, the system prompt includes:
 
 ```
-You are a Mods Runtime assistant. You create and modify image generation workflows.
+You are a Modl Runtime assistant. You create and modify image generation workflows.
 
 AVAILABLE NODES:
 {node_catalog_summary}  // Compact summary of all nodes with types
 
 INSTALLED MODELS:
-{mods_list_output}      // What's available locally
+{modl_list_output}      // What's available locally
 
 CURRENT WORKFLOW:
 {current_yaml}          // The workflow being edited
@@ -542,7 +542,7 @@ LAST RUN RESULT:
 
 FORMAT RULES:
 - Use $step_name.output_name for references
-- Always include a `requires:` section with mods model IDs
+- Always include a `requires:` section with modl model IDs
 - Always include `inputs:` with sensible defaults
 - Prefer named outputs from RETURN_NAMES when available
 ...
@@ -611,7 +611,7 @@ Agent: [calls modify_flow tool]
 
 ---
 
-## Part 5: mods.lock Integration
+## Part 5: modl.lock Integration
 
 ### Flow Lock File
 
@@ -619,11 +619,11 @@ Every `*.flow.yaml` can have a companion `*.flow.lock`:
 
 ```yaml
 # flux-portrait.flow.lock
-# Auto-generated by `mods runtime lock`
+# Auto-generated by `modl runtime lock`
 # Pins exact model versions for reproducibility
 
 generated: 2026-02-25T10:30:00Z
-mods_version: 0.2.0
+modl_version: 0.2.0
 runtime_version: 0.1.0
 
 models:
@@ -666,23 +666,23 @@ nodes:
   #     sha256: "..."   # hash of the node pack
 
 # Computed from the flow's `requires:` + transitive dependencies
-# `mods runtime install` uses this to set up the exact environment
+# `modl runtime install` uses this to set up the exact environment
 ```
 
 ### Commands
 
 ```bash
 # Resolve and lock all dependencies for a flow
-mods runtime lock flux-portrait.flow.yaml
+modl runtime lock flux-portrait.flow.yaml
 
 # Install everything needed to run a locked flow  
-mods runtime install flux-portrait.flow.yaml
+modl runtime install flux-portrait.flow.yaml
 
 # Run a flow
-mods runtime run flux-portrait.flow.yaml --prompt "a woman in a garden"
+modl runtime run flux-portrait.flow.yaml --prompt "a woman in a garden"
 
 # Package for deployment (flow + lock + all model references)
-mods runtime pack flux-portrait.flow.yaml -o flux-portrait.tar.gz
+modl runtime pack flux-portrait.flow.yaml -o flux-portrait.tar.gz
 ```
 
 ---
@@ -696,12 +696,12 @@ ComfyUI custom nodes are:
 - No versioning, no dependency declarations, no compatibility metadata
 - ComfyUI Manager helps but it's a patchwork
 
-### Mods Node Registry
+### Modl Node Registry
 
-Extend the existing mods-registry with a `nodes/` section:
+Extend the existing modl-registry with a `nodes/` section:
 
 ```yaml
-# mods-registry/manifests/nodes/comfyui-impact-pack.yaml
+# modl-registry/manifests/nodes/comfyui-impact-pack.yaml
 id: comfyui-impact-pack
 name: "Impact Pack"
 type: node_pack
@@ -767,7 +767,7 @@ nodes:
 
 ### Deploy Packaging
 
-`mods runtime pack` creates a self-contained deployment bundle:
+`modl runtime pack` creates a self-contained deployment bundle:
 
 ```
 flux-portrait.bundle/
@@ -775,25 +775,25 @@ flux-portrait.bundle/
   flow.lock           # Pinned dependencies
   manifest.json       # Bundle metadata
   # Models are NOT included (too large) — referenced by hash
-  # The deploy platform pulls from mods CDN or HuggingFace
+  # The deploy platform pulls from modl CDN or HuggingFace
 ```
 
 ### Modal.com Integration
 
 ```python
-# Auto-generated by `mods runtime deploy --target modal`
+# Auto-generated by `modl runtime deploy --target modal`
 import modal
 
 app = modal.App("flux-portrait")
 
 # Volume with models (pre-populated or downloaded on first run)
-model_volume = modal.Volume.from_name("mods-models", create_if_missing=True)
+model_volume = modal.Volume.from_name("modl-models", create_if_missing=True)
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install("torch", "safetensors", "transformers", "accelerate")
     .pip_install("comfyui-core")  # Hypothetical headless ComfyUI package
-    .run_commands("mods runtime install flow.lock --target /models")
+    .run_commands("modl runtime install flow.lock --target /models")
 )
 
 @app.function(
@@ -803,7 +803,7 @@ image = (
     timeout=300,
 )
 def generate(prompt: str, seed: int = -1, **kwargs):
-    from mods_runtime import execute_flow
+    from modl_runtime import execute_flow
     return execute_flow("flow.yaml", inputs={"prompt": prompt, "seed": seed, **kwargs})
 
 @app.local_entrypoint()
@@ -812,19 +812,19 @@ def main(prompt: str):
     # Save result images locally
 ```
 
-### Mods Cloud (Future — The "Vercel for AI Flows" Vision)
+### Modl Cloud (Future — The "Vercel for AI Flows" Vision)
 
 ```bash
-# Deploy to Mods Cloud
-mods deploy flux-portrait.flow.yaml
+# Deploy to Modl Cloud
+modl deploy flux-portrait.flow.yaml
 
 # Returns:
-# ✓ Deployed to https://flux-portrait.mods.run
-# ✓ API: POST https://flux-portrait.mods.run/api/generate
-# ✓ Dashboard: https://app.mods.run/flows/flux-portrait
+# ✓ Deployed to https://flux-portrait.modl.run
+# ✓ API: POST https://flux-portrait.modl.run/api/generate
+# ✓ Dashboard: https://app.modl.run/flows/flux-portrait
 ```
 
-What Mods Cloud does:
+What Modl Cloud does:
 - **Serverless GPU** — spin up A100/H100 on demand (backed by Modal/RunPod)
 - **Model caching** — popular models pre-loaded on warm instances
 - **CDN** — results served from edge
@@ -840,10 +840,10 @@ This is the long-term monetization play — free tier for hobbyists, paid tiers 
 
 ### Phase 1: YAML Runtime (4-6 weeks)
 
-**Goal**: `mods runtime run flow.yaml` works locally.
+**Goal**: `modl runtime run flow.yaml` works locally.
 
 ```
-mods/src/
+modl/src/
   runtime/
     mod.rs              # Module root
     yaml_schema.rs      # Flow YAML serde types
@@ -858,7 +858,7 @@ Deliverables:
 - [ ] YAML schema definition (serde structs)
 - [ ] Compiler: YAML → ComfyUI prompt JSON
 - [ ] Bridge: talk to ComfyUI via HTTP + WebSocket
-- [ ] CLI: `mods runtime run`, `mods runtime lock`, `mods runtime install`
+- [ ] CLI: `modl runtime run`, `modl runtime lock`, `modl runtime install`
 - [ ] Node catalog fetcher (from ComfyUI `/object_info`)
 - [ ] Validation (type checking, reference resolution)
 - [ ] Integration tests with actual ComfyUI
@@ -868,7 +868,7 @@ Deliverables:
 **Goal**: Web interface with LLM-assisted workflow creation.
 
 ```
-mods-app/                     # New repo or monorepo
+modl-app/                     # New repo or monorepo
   src/
     app/
       page.tsx                # Main three-panel layout
@@ -894,7 +894,7 @@ mods-app/                     # New repo or monorepo
         ModelBadge.tsx        # Shows installed model status
         NodeSearch.tsx        # Search available nodes
     lib/
-      runtime-client.ts      # HTTP client to Mods Runtime
+      runtime-client.ts      # HTTP client to Modl Runtime
       websocket.ts           # WebSocket connection manager
       llm-tools.ts           # Tool definitions for the LLM
       yaml-utils.ts          # YAML parsing/manipulation
@@ -917,18 +917,18 @@ Deliverables:
 
 **Goal**: Custom nodes are versioned and lockable.
 
-- [ ] Node manifest schema in mods-registry
-- [ ] `mods runtime lock` includes node versions
-- [ ] `mods runtime install` sets up custom nodes
+- [ ] Node manifest schema in modl-registry
+- [ ] `modl runtime lock` includes node versions
+- [ ] `modl runtime install` sets up custom nodes
 - [ ] Node search in the UI
 
 ### Phase 4: Deploy Platform (6-8 weeks)
 
-**Goal**: One-click deployment to Modal.com, then Mods Cloud.
+**Goal**: One-click deployment to Modal.com, then Modl Cloud.
 
-- [ ] `mods runtime pack` — bundle creation
-- [ ] `mods deploy --target modal` — Modal.com codegen
-- [ ] Mods Cloud MVP — serverless GPU execution
+- [ ] `modl runtime pack` — bundle creation
+- [ ] `modl deploy --target modal` — Modal.com codegen
+- [ ] Modl Cloud MVP — serverless GPU execution
 - [ ] Public API for deployed flows
 - [ ] Usage dashboard
 
@@ -958,7 +958,7 @@ The Rust server handles:
 - YAML parsing and compilation (no Python needed)
 - Job scheduling and queue management
 - Lock file resolution
-- Model dependency resolution (already in mods)
+- Model dependency resolution (already in modl)
 - Static file serving for the web UI
 - Deploy packaging
 
@@ -993,16 +993,16 @@ Consider supporting it as a backend option alongside local ComfyUI.
 
 ## Part 10: Competitive Landscape
 
-| Tool | Strength | Weakness | Mods Differentiator |
+| Tool | Strength | Weakness | Modl Differentiator |
 |------|----------|----------|-------------------|
 | ComfyUI | Node ecosystem, flexibility | UX, no deployment, no versioning | LLM-first UX, lock files, deployment |
 | A1111 | Simple UI, extensions | Stale, limited pipelines | Modern, composable, deployable |
 | InvokeAI | Polish, good UX | Small node ecosystem, slow dev | AI-assisted, YAML portability |
 | Replicate | Easy deployment | Vendor lock-in, expensive | Open source, portable, cheaper |
 | fal.ai | Fast, good API | Limited to their models/pipelines | Bring your own pipeline, any model |
-| RunComfy | ComfyUI in the cloud | Just hosted ComfyUI | Better UX, lock files, mods integration |
+| RunComfy | ComfyUI in the cloud | Just hosted ComfyUI | Better UX, lock files, modl integration |
 
-**Mods' unique position**: The only tool that combines LLM-native workflow authoring, reproducible environments (lock files), and a path from local GPU to cloud deployment — all while maintaining compatibility with ComfyUI's massive node ecosystem.
+**Modl' unique position**: The only tool that combines LLM-native workflow authoring, reproducible environments (lock files), and a path from local GPU to cloud deployment — all while maintaining compatibility with ComfyUI's massive node ecosystem.
 
 ---
 
@@ -1103,22 +1103,22 @@ steps:
 ## Appendix B: Directory Structure (Full Vision)
 
 ```
-modshq/
-  mods/                    # CLI model manager (existing, Rust)
-  mods-registry/           # Model manifests (existing)
-  mods-runtime/            # Could live in mods repo as a feature, or separate
+modl/
+  modl/                    # CLI model manager (existing, Rust)
+  modl-registry/           # Model manifests (existing)
+  modl-runtime/            # Could live in modl repo as a feature, or separate
     src/runtime/           # Rust: YAML compiler, bridge, job queue
-  mods-app/                # Web UI (new repo)
+  modl-app/                # Web UI (new repo)
     src/                   # Next.js app
-  mods-cloud/              # Deploy platform (future)
+  modl-cloud/              # Deploy platform (future)
     infrastructure/        # Terraform/Pulumi for Modal.com, AWS, etc.
     api/                   # Public API gateway
 ```
 
-Or, keep it simpler — everything in the `mods` monorepo:
+Or, keep it simpler — everything in the `modl` monorepo:
 
 ```
-mods/
+modl/
   src/
     cli/                   # Existing CLI commands
     core/                  # Existing core logic

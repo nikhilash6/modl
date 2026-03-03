@@ -8,7 +8,7 @@ pub struct Database {
 }
 
 impl Database {
-    /// Open (or create) the database at ~/.mods/state.db
+    /// Open (or create) the database at ~/.modl/state.db
     pub fn open() -> Result<Self> {
         let path = Self::default_path();
         if let Some(parent) = path.parent() {
@@ -31,7 +31,7 @@ impl Database {
     fn default_path() -> PathBuf {
         dirs::home_dir()
             .expect("Could not determine home directory")
-            .join(".mods")
+            .join(".modl")
             .join("state.db")
     }
 

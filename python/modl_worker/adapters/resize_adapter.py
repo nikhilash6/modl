@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import List
 
-from mods_worker.protocol import EventEmitter
+from modl_worker.protocol import EventEmitter
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 

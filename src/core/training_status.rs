@@ -1,7 +1,7 @@
 //! Parse live training progress from log files and process state.
 //!
-//! Works regardless of whether training was launched via `mods train` or
-//! directly via `python run.py`. Scans `~/.mods/training_output/` for
+//! Works regardless of whether training was launched via `modl train` or
+//! directly via `python run.py`. Scans `~/.modl/training_output/` for
 //! active log files and parses tqdm-style progress lines.
 
 use anyhow::Result;
@@ -380,7 +380,7 @@ fn find_running_training_configs() -> Vec<String> {
     for line in stdout.lines() {
         let trimmed = line.trim();
         // Match: python run.py <config_path>
-        if !trimmed.contains("run.py") && !trimmed.contains("mods_worker") {
+        if !trimmed.contains("run.py") && !trimmed.contains("modl_worker") {
             continue;
         }
 
@@ -587,7 +587,7 @@ fn find_latest_checkpoint(run_inner: &Path) -> Option<String> {
 fn training_output_dir() -> PathBuf {
     dirs::home_dir()
         .expect("Could not determine home directory")
-        .join(".mods")
+        .join(".modl")
         .join("training_output")
 }
 

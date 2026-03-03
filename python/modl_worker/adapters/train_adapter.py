@@ -1,6 +1,6 @@
 """Train adapter — subprocess orchestration for ai-toolkit training.
 
-This module is the glue between mods and ai-toolkit.  It:
+This module is the glue between modl and ai-toolkit.  It:
   1. Loads a TrainJobSpec YAML and translates it via config_builder
   2. Launches ai-toolkit's run.py as a subprocess
   3. Streams stdout, parses progress/errors, and emits events
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from mods_worker.protocol import EventEmitter
+from modl_worker.protocol import EventEmitter
 
 # Re-export for backward compatibility (other code may import from here)
 from .config_builder import spec_to_aitoolkit_config  # noqa: F401
@@ -58,15 +58,15 @@ _TAIL_BUFFER_SIZE = 30
 def _build_train_command(config_path: Path) -> List[str]:
     """Build the command to run ai-toolkit training.
 
-    Checks MODS_AITOOLKIT_TRAIN_CMD (custom override), then MODS_AITOOLKIT_ROOT
+    Checks MODL_AITOOLKIT_TRAIN_CMD (custom override), then MODL_AITOOLKIT_ROOT
     and sys.path for run.py, then falls back to ``python -m toolkit.job``.
     """
-    env_cmd = os.getenv("MODS_AITOOLKIT_TRAIN_CMD", "").strip()
+    env_cmd = os.getenv("MODL_AITOOLKIT_TRAIN_CMD", "").strip()
     if env_cmd:
         env_cmd = env_cmd.replace("{config}", str(config_path)).replace("{python}", sys.executable)
         return shlex.split(env_cmd)
 
-    aitk_root = os.getenv("MODS_AITOOLKIT_ROOT", "")
+    aitk_root = os.getenv("MODL_AITOOLKIT_ROOT", "")
     if not aitk_root:
         for p in sys.path:
             candidate = os.path.join(p, "run.py")
@@ -129,15 +129,15 @@ def run_train(config_path: Path, emitter: EventEmitter) -> int:
     except ImportError:
         effective_config_path = config_path
     except Exception as e:
-        print(f"[mods] WARNING: spec translation failed: {e}", file=sys.stderr)
+        print(f"[modl] WARNING: spec translation failed: {e}", file=sys.stderr)
         import traceback; traceback.print_exc(file=sys.stderr)
         effective_config_path = config_path
 
     # Build the ai-toolkit command.
-    # Prefer MODS_AITOOLKIT_ROOT (set by the Rust executor) to locate run.py
+    # Prefer MODL_AITOOLKIT_ROOT (set by the Rust executor) to locate run.py
     # since _build_train_command has intermittent issues when called as a
     # function from a piped subprocess context.
-    aitk_root = os.getenv("MODS_AITOOLKIT_ROOT", "")
+    aitk_root = os.getenv("MODL_AITOOLKIT_ROOT", "")
     if aitk_root:
         run_py = os.path.join(aitk_root, "run.py")
         if os.path.exists(run_py):

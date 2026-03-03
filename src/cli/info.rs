@@ -180,7 +180,7 @@ fn show_registry_model(
 fn show_trained_artifact(db: &Database, query: &str) -> Result<()> {
     let artifact = db.find_artifact(query)?.ok_or_else(|| {
         anyhow::anyhow!(
-            "'{}' not found in registry or trained outputs. Run `mods update` first?",
+            "'{}' not found in registry or trained outputs. Run `modl update` first?",
             query
         )
     })?;
@@ -294,7 +294,7 @@ fn show_trained_artifact(db: &Database, query: &str) -> Result<()> {
     // Symlink info
     let loras_dir = dirs::home_dir()
         .unwrap_or_default()
-        .join(".mods")
+        .join(".modl")
         .join("loras");
     let symlink_path = loras_dir.join(format!("{}.safetensors", lora_name));
     if symlink_path.exists() {

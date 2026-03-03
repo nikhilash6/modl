@@ -18,7 +18,7 @@ pub async fn run(type_filter: Option<AssetType>) -> Result<()> {
             println!("No models installed yet.");
             println!(
                 "  Run {} to get started.",
-                style("mods install flux-dev").cyan()
+                style("modl install flux-dev").cyan()
             );
         }
         return Ok(());

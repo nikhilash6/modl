@@ -523,7 +523,7 @@ mod tests {
             job_id: "job-123".into(),
             sequence: 1,
             timestamp: "2026-01-01T00:00:00Z".into(),
-            source: "mods_worker".into(),
+            source: "modl_worker".into(),
             event: EventPayload::Progress {
                 stage: "train".into(),
                 step: 100,

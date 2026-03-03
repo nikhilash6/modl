@@ -18,7 +18,7 @@ pub async fn run(reinstall: bool) -> Result<()> {
 
     if let Some(cmd) = result.train_command_template {
         println!("  Train cmd: {}", cmd);
-        println!("{} Runtime is ready for `mods train`", style("✓").green());
+        println!("{} Runtime is ready for `modl train`", style("✓").green());
     } else {
         println!(
             "{} Could not auto-detect ai-toolkit train command.",
@@ -26,7 +26,7 @@ pub async fn run(reinstall: bool) -> Result<()> {
         );
         println!(
             "  Set {} and re-run setup if needed.",
-            style("MODS_AITOOLKIT_TRAIN_CMD").cyan()
+            style("MODL_AITOOLKIT_TRAIN_CMD").cyan()
         );
     }
 

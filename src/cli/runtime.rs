@@ -67,7 +67,7 @@ pub async fn run(command: RuntimeCommands) -> Result<()> {
         }
         RuntimeCommands::Status => {
             let status = runtime::status()?;
-            println!("{} Runtime status", style("mods runtime").cyan().bold());
+            println!("{} Runtime status", style("modl runtime").cyan().bold());
             println!("  Root: {}", status.runtime_root.display());
             println!("  Lock: {}", status.lock_path.display());
             println!();
@@ -86,7 +86,7 @@ pub async fn run(command: RuntimeCommands) -> Result<()> {
                 println!("{} Not installed", style("!").yellow().bold());
                 println!(
                     "  Run {} to install.",
-                    style("mods runtime install --profile trainer-cu124").cyan()
+                    style("modl runtime install --profile trainer-cu124").cyan()
                 );
             }
 
@@ -94,7 +94,7 @@ pub async fn run(command: RuntimeCommands) -> Result<()> {
         }
         RuntimeCommands::Doctor => {
             let report = runtime::doctor()?;
-            println!("{} Runtime doctor", style("mods runtime").cyan().bold());
+            println!("{} Runtime doctor", style("modl runtime").cyan().bold());
 
             let mut issues = 0;
 

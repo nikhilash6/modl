@@ -160,13 +160,13 @@ pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) ->
             );
             println!(
                 "    Run: {}",
-                style(format!("mods auth {}", provider)).cyan()
+                style(format!("modl auth {}", provider)).cyan()
             );
             if let Some(ref terms) = item.manifest.auth.as_ref().unwrap().terms_url {
                 println!("    Accept terms at: {}", style(terms).underlined());
             }
             anyhow::bail!(
-                "Authentication required. Run `mods auth {}` first.",
+                "Authentication required. Run `modl auth {}` first.",
                 provider
             );
         }
@@ -232,7 +232,7 @@ pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) ->
                                 .unwrap_or("huggingface");
                             println!(
                                 "    Run: {}",
-                                style(format!("mods auth {}", provider)).cyan()
+                                style(format!("modl auth {}", provider)).cyan()
                             );
                             if let Some(ref auth) = item.manifest.auth
                                 && let Some(ref terms) = auth.terms_url

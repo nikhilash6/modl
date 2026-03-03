@@ -1,10 +1,10 @@
 # Cloud Capability Model
 
-> **STATUS: NOT IMPLEMENTED** — Future spec for `mods --cloud` gating. See [plan.md](plan.md) for cloud roadmap.
+> **STATUS: NOT IMPLEMENTED** — Future spec for `modl --cloud` gating. See [plan.md](plan.md) for cloud roadmap.
 
 ## Purpose
 
-Define a provider-neutral cloud gating model for `mods --cloud` execution.
+Define a provider-neutral cloud gating model for `modl --cloud` execution.
 
 Launch goals:
 - Fail fast on missing auth
@@ -105,9 +105,9 @@ Provider-specific billing fields may be stored in metadata JSON but must not rep
 Commands:
 
 ```bash
-mods cloud gate status
-mods cloud gate refresh
-mods cloud subscription status
+modl cloud gate status
+modl cloud gate refresh
+modl cloud subscription status
 ```
 
 ---

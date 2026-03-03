@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 from typing import List, Tuple
 
-from mods_worker.protocol import EventEmitter
+from modl_worker.protocol import EventEmitter
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -54,7 +54,7 @@ def _load_florence2(emitter: EventEmitter, model_path: str | None = None) -> Tup
     """Load Florence-2 model and processor.
     
     If model_path is provided, loads from that local directory (pre-downloaded
-    via mods registry). Otherwise falls back to HuggingFace Hub download.
+    via modl registry). Otherwise falls back to HuggingFace Hub download.
     """
     from transformers import AutoModelForCausalLM, AutoProcessor
     import torch

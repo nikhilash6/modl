@@ -22,8 +22,8 @@ const TRAINER_TORCHVISION_VERSION: &str = "0.22.0";
 const TRAINER_TORCHAUDIO_VERSION: &str = "2.7.0";
 const AITOOLKIT_REPO_URL: &str = "https://github.com/ostris/ai-toolkit.git";
 const AITOOLKIT_CLONE_DIR: &str = "ai-toolkit";
-const DEFAULT_PYTHON_ARTIFACT_URL: &str = "https://github.com/modshq/mods-runtime-manifests/releases/download/v2026.02.1/cpython-3.11.11-linux-x86_64.tar.gz";
-const PYTHON_ARTIFACT_URL_ENV: &str = "MODS_PYTHON_ARTIFACT_URL";
+const DEFAULT_PYTHON_ARTIFACT_URL: &str = "https://github.com/modl/modl-runtime-manifests/releases/download/v2026.02.1/cpython-3.11.11-linux-x86_64.tar.gz";
+const PYTHON_ARTIFACT_URL_ENV: &str = "MODL_PYTHON_ARTIFACT_URL";
 
 #[derive(Debug, Clone)]
 pub struct RuntimeInstallResult {
@@ -320,7 +320,7 @@ pub fn reset(purge_cache: bool) -> Result<()> {
 
 fn runtime_root() -> Result<PathBuf> {
     let home = dirs::home_dir().context("Could not determine home directory")?;
-    Ok(home.join(".mods").join("runtime"))
+    Ok(home.join(".modl").join("runtime"))
 }
 
 fn ensure_layout(root: &Path) -> Result<()> {
@@ -358,7 +358,7 @@ fn write_manifest_index_if_missing(root: &Path, channel: &str) -> Result<()> {
             {
                 "id": DEFAULT_PROFILE,
                 "version": "2026.02.1",
-                "manifest_uri": "https://github.com/modshq/mods-runtime-manifests/releases/download/v2026.02.1/trainer-cu124.json",
+                "manifest_uri": "https://github.com/modl/modl-runtime-manifests/releases/download/v2026.02.1/trainer-cu124.json",
                 "sha256": ""
             }
         ]
@@ -693,7 +693,7 @@ pub fn aitoolkit_path() -> Result<Option<PathBuf>> {
 }
 
 fn bootstrap_marker_path(env_dir: &Path) -> PathBuf {
-    env_dir.join(".mods-bootstrap-complete")
+    env_dir.join(".modl-bootstrap-complete")
 }
 
 async fn install_managed_python(root: &Path, profile: &str) -> Result<()> {

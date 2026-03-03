@@ -57,7 +57,7 @@ async fn run_list(limit: usize, kind_filter: Option<&str>) -> Result<()> {
         println!("No outputs yet.");
         println!(
             "  Run {} to generate images.",
-            style("mods generate \"a photo of...\"").cyan()
+            style("modl generate \"a photo of...\"").cyan()
         );
         return Ok(());
     }
@@ -110,7 +110,7 @@ async fn run_list(limit: usize, kind_filter: Option<&str>) -> Result<()> {
     println!(
         "\n  {} outputs shown. Use {} for details.",
         style(filtered.len()).bold(),
-        style("mods outputs show <id>").cyan()
+        style("modl outputs show <id>").cyan()
     );
 
     Ok(())

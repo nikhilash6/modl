@@ -118,16 +118,16 @@ fn create_lora_symlinks(
 ) -> Result<Vec<PathBuf>> {
     let mut links = Vec::new();
 
-    // Symlink with friendly name in the mods loras dir
-    let mods_lora_dir = dirs::home_dir()
+    // Symlink with friendly name in the modl loras dir
+    let modl_lora_dir = dirs::home_dir()
         .expect("Could not determine home directory")
-        .join(".mods")
+        .join(".modl")
         .join("loras");
 
-    if let Err(e) = std::fs::create_dir_all(&mods_lora_dir) {
+    if let Err(e) = std::fs::create_dir_all(&modl_lora_dir) {
         eprintln!(
             "Warning: could not create loras dir {}: {e}",
-            mods_lora_dir.display()
+            modl_lora_dir.display()
         );
         return Ok(links);
     }
@@ -138,7 +138,7 @@ fn create_lora_symlinks(
         .and_then(|e| e.to_str())
         .unwrap_or("safetensors");
     let link_name = format!("{lora_name}.{ext}");
-    let link_path = mods_lora_dir.join(&link_name);
+    let link_path = modl_lora_dir.join(&link_name);
 
     match symlink::create(&link_path, store_path) {
         Ok(()) => links.push(link_path),

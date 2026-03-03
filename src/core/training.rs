@@ -4,16 +4,16 @@ use std::path::PathBuf;
 
 /// Resolve the path to the Python worker package root.
 ///
-/// Checks `MODS_WORKER_PYTHON_ROOT` env var first, then falls back to
+/// Checks `MODL_WORKER_PYTHON_ROOT` env var first, then falls back to
 /// `CARGO_MANIFEST_DIR/python`.
 pub fn resolve_worker_python_root() -> Result<PathBuf> {
-    if let Ok(custom) = env::var("MODS_WORKER_PYTHON_ROOT") {
+    if let Ok(custom) = env::var("MODL_WORKER_PYTHON_ROOT") {
         let path = PathBuf::from(custom);
         if path.exists() {
             return Ok(path);
         }
         bail!(
-            "MODS_WORKER_PYTHON_ROOT points to missing path: {}",
+            "MODL_WORKER_PYTHON_ROOT points to missing path: {}",
             path.display()
         );
     }
@@ -23,7 +23,7 @@ pub fn resolve_worker_python_root() -> Result<PathBuf> {
         Ok(default_path)
     } else {
         bail!(
-            "Worker python package not found at {}. Set MODS_WORKER_PYTHON_ROOT to a valid path.",
+            "Worker python package not found at {}. Set MODL_WORKER_PYTHON_ROOT to a valid path.",
             default_path.display()
         )
     }

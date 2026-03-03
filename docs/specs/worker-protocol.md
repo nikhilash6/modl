@@ -1,10 +1,10 @@
-# mods_worker Protocol (JSONL)
+# modl_worker Protocol (JSONL)
 
-> **STATUS: IMPLEMENTED** — Matches `python/mods_worker/protocol.py` and event parsing in `src/core/executor.rs`. Canonical reference.
+> **STATUS: IMPLEMENTED** — Matches `python/modl_worker/protocol.py` and event parsing in `src/core/executor.rs`. Canonical reference.
 
 ## Purpose
 
-Define the canonical JSONL protocol between `mods` (Rust) and `mods_worker` (Python).
+Define the canonical JSONL protocol between `modl` (Rust) and `modl_worker` (Python).
 
 This protocol is the long-term contract for local execution and the template for cloud event normalization.
 
@@ -29,7 +29,7 @@ All events use this envelope:
   "job_id": "01JT8Q...",
   "sequence": 1,
   "timestamp": "2026-02-26T18:00:00Z",
-  "source": "mods_worker",
+  "source": "modl_worker",
   "event": {
     "type": "job_started"
   }
@@ -146,10 +146,10 @@ Each error event requires:
 
 ## Worker Module Split (Required)
 
-`mods_worker` structure:
+`modl_worker` structure:
 
 ```text
-mods_worker/
+modl_worker/
   main.py
   protocol.py
   adapters/

@@ -62,7 +62,7 @@ pub async fn run(id: &str, force: bool) -> Result<()> {
         println!(
             "  {} Store file kept — run {} to reclaim space",
             style("i").dim(),
-            style("mods gc").cyan()
+            style("modl gc").cyan()
         );
     }
 
@@ -97,10 +97,10 @@ fn remove_trained_artifact(
         style(lora_name).bold()
     );
 
-    // Remove the LoRA symlink from ~/.mods/loras/
+    // Remove the LoRA symlink from ~/.modl/loras/
     let loras_dir = dirs::home_dir()
         .unwrap_or_default()
-        .join(".mods")
+        .join(".modl")
         .join("loras");
     let symlink_path = loras_dir.join(format!("{}.safetensors", lora_name));
     if symlink_path.is_symlink() {
@@ -131,7 +131,7 @@ fn remove_trained_artifact(
     // Remove training output directory (samples, logs, config)
     let training_output_dir = dirs::home_dir()
         .unwrap_or_default()
-        .join(".mods")
+        .join(".modl")
         .join("training_output")
         .join(lora_name);
     if training_output_dir.is_dir() {

@@ -27,13 +27,13 @@ pub struct DatasetInfo {
 fn datasets_root() -> PathBuf {
     dirs::home_dir()
         .expect("Could not determine home directory")
-        .join(".mods")
+        .join(".modl")
         .join("datasets")
 }
 
 /// Resolve a name or path to a dataset directory.
 /// If it looks like a path (contains / or \), use it directly.
-/// Otherwise, look under ~/.mods/datasets/<name>.
+/// Otherwise, look under ~/.modl/datasets/<name>.
 pub fn resolve_path(name_or_path: &str) -> PathBuf {
     let path = PathBuf::from(name_or_path);
     if path.is_absolute() || name_or_path.contains('/') || name_or_path.contains('\\') {
@@ -46,7 +46,7 @@ pub fn resolve_path(name_or_path: &str) -> PathBuf {
 /// Create a managed dataset by copying images from a source directory.
 ///
 /// Copies images matching valid extensions from `from_dir` into
-/// `~/.mods/datasets/<name>/`, along with any paired `.txt` caption files.
+/// `~/.modl/datasets/<name>/`, along with any paired `.txt` caption files.
 ///
 /// Supports **recursive** scanning: if the source has subfolders (e.g. `happy/`,
 /// `sad/`), images inside them are collected and the subfolder name is used as a
@@ -265,7 +265,7 @@ pub fn validate(path: &Path) -> Result<DatasetInfo> {
     Ok(info)
 }
 
-/// List all managed datasets under ~/.mods/datasets/
+/// List all managed datasets under ~/.modl/datasets/
 pub fn list() -> Result<Vec<DatasetInfo>> {
     let root = datasets_root();
     if !root.exists() {

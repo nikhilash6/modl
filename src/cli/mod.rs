@@ -32,7 +32,7 @@ use crate::core::cloud::CloudProvider;
 use crate::core::job::{LoraType, Optimizer, Preset};
 use crate::core::manifest::AssetType;
 
-/// Extended help text for `mods train` with recommended settings per model.
+/// Extended help text for `modl train` with recommended settings per model.
 const TRAIN_HELP_EXTRA: &str = "\
 \x1b[1mRecommended settings by model:\x1b[0m
 
@@ -87,61 +87,61 @@ const TRAIN_HELP_EXTRA: &str = "\
 const TRAIN_EXAMPLES: &str = "\
 \x1b[1mExamples:\x1b[0m
   # Train a character LoRA on Flux (interactive prompts fill in the rest)
-  mods train --base flux-dev --lora-type character
+  modl train --base flux-dev --lora-type character
 
   # Quick style LoRA with all flags specified
-  mods train --dataset paintings --base flux-dev --lora-type style \\
+  modl train --dataset paintings --base flux-dev --lora-type style \\
     --name impressionist-v1 --trigger \"in the style of MYPAINT\" --preset quick
 
   # Resume from a checkpoint
-  mods train --base flux-dev --lora-type character --resume ./checkpoint-500.safetensors
+  modl train --base flux-dev --lora-type character --resume ./checkpoint-500.safetensors
 
   # Dry-run: see the generated spec without running
-  mods train --dataset headshots --base flux-dev --lora-type character --dry-run
+  modl train --dataset headshots --base flux-dev --lora-type character --dry-run
 ";
 
 const GENERATE_EXAMPLES: &str = "\
 \x1b[1mExamples:\x1b[0m
   # Simple generation with default model (flux-schnell)
-  mods generate \"a cat astronaut on the moon\"
+  modl generate \"a cat astronaut on the moon\"
 
   # Use a specific base model + LoRA
-  mods generate \"photo of OHWX person at the beach\" --base flux-dev --lora pedro-v1
+  modl generate \"photo of OHWX person at the beach\" --base flux-dev --lora pedro-v1
 
   # Generate multiple images with a fixed seed
-  mods generate \"product photo on marble\" --count 4 --seed 42 --size 16:9
+  modl generate \"product photo on marble\" --count 4 --seed 42 --size 16:9
 
   # Landscape format with more steps
-  mods generate \"sunset over mountains\" --size 16:9 --steps 30 --guidance 4.0
+  modl generate \"sunset over mountains\" --size 16:9 --steps 30 --guidance 4.0
 ";
 
 const DATASET_EXAMPLES: &str = "\
 \x1b[1mExamples:\x1b[0m
   # Full pipeline: create → resize → caption in one command
-  mods dataset prepare my-photos --from ~/photos/headshots/
+  modl dataset prepare my-photos --from ~/photos/headshots/
 
   # Step-by-step: create, then caption, then validate
-  mods dataset create products --from ~/product-photos/
-  mods dataset caption products
-  mods dataset validate products
+  modl dataset create products --from ~/product-photos/
+  modl dataset caption products
+  modl dataset validate products
 
   # Resize to 512px (SD 1.5) instead of default 1024px
-  mods dataset resize my-dataset --resolution 512
+  modl dataset resize my-dataset --resolution 512
 ";
 
 const MODEL_PULL_EXAMPLES: &str = "\
 \x1b[1mExamples:\x1b[0m
   # Pull a model (auto-selects variant for your GPU)
-  mods model pull flux-dev
+  modl model pull flux-dev
 
   # Force a specific variant
-  mods model pull flux-dev --variant fp8
+  modl model pull flux-dev --variant fp8
 
   # Preview what would be downloaded
-  mods model pull sdxl-base-1.0 --dry-run
+  modl model pull sdxl-base-1.0 --dry-run
 ";
 
-/// Auth provider for `mods auth` command.
+/// Auth provider for `modl auth` command.
 #[derive(Clone, Debug, ValueEnum)]
 pub enum AuthProvider {
     #[value(alias = "hf")]
@@ -151,7 +151,7 @@ pub enum AuthProvider {
 
 #[derive(Parser)]
 #[command(
-    name = "mods",
+    name = "modl",
     about = "Model manager for the AI image generation ecosystem",
     version,
     propagate_version = true
@@ -229,7 +229,7 @@ pub enum ModelCommands {
         r#for: Option<String>,
     },
 
-    /// Link an existing tool's model folder into mods
+    /// Link an existing tool's model folder into modl
     Link {
         /// Path to ComfyUI installation
         #[arg(long)]
@@ -253,7 +253,7 @@ pub enum ModelCommands {
 
     /// Import and install from a lock file
     Import {
-        /// Path to mods.lock file
+        /// Path to modl.lock file
         path: String,
     },
 }
@@ -445,7 +445,7 @@ pub enum Commands {
         foreground: bool,
     },
 
-    /// Update mods CLI to the latest release
+    /// Update modl CLI to the latest release
     Upgrade,
 
     /// Dump CLI schema as JSON (for docs generation)
@@ -597,7 +597,7 @@ async fn run_model(command: ModelCommands) -> Result<()> {
 fn print_train_info() {
     println!(
         "\n  {} — Train LoRAs on your GPU\n",
-        style("mods train").bold().cyan()
+        style("modl train").bold().cyan()
     );
 
     println!(
@@ -688,15 +688,15 @@ fn print_train_info() {
     println!();
     println!("  {}", style("Quick start:").bold());
     println!(
-        "    {} mods train --base flux-dev --lora-type character",
+        "    {} modl train --base flux-dev --lora-type character",
         style("$").dim()
     );
     println!(
-        "    {} mods train --base flux-dev --lora-type style --dataset paintings",
+        "    {} modl train --base flux-dev --lora-type style --dataset paintings",
         style("$").dim()
     );
     println!(
-        "    {} mods train --base qwen-image --lora-type style",
+        "    {} modl train --base qwen-image --lora-type style",
         style("$").dim()
     );
 
@@ -705,18 +705,18 @@ fn print_train_info() {
     println!("  {}", style("Subcommands:").bold());
     println!(
         "    {}    Install training dependencies (ai-toolkit + torch)",
-        style("mods train setup").bold()
+        style("modl train setup").bold()
     );
     println!(
         "    {}   Show live training progress",
-        style("mods train status").bold()
+        style("modl train status").bold()
     );
 
     // ── More info ─────────────────────────────────────────────────
     println!();
     println!(
         "  Run {} for all flags, presets, and optimizer guide.",
-        style("mods train --help").bold()
+        style("modl train --help").bold()
     );
     println!();
 }
@@ -821,7 +821,7 @@ fn collect_schema_commands(
 
         // Build usage string
         let usage = {
-            let mut parts = vec![format!("mods {full_name}")];
+            let mut parts = vec![format!("modl {full_name}")];
             for a in &args {
                 let n = a["name"].as_str().unwrap();
                 if a["required"].as_bool().unwrap_or(false) {

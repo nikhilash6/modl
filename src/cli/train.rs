@@ -243,7 +243,7 @@ pub async fn run(
     // -------------------------------------------------------------------
     let output_dir = dirs::home_dir()
         .expect("Could not determine home directory")
-        .join(".mods")
+        .join(".modl")
         .join("training_output")
         .join(&lora_name);
 
@@ -489,7 +489,7 @@ async fn execute_training(
     if final_status == "completed" {
         let store_root = dirs::home_dir()
             .expect("Could not determine home directory")
-            .join(".mods");
+            .join(".modl");
 
         for artifact_path in &artifact_paths {
             let path = PathBuf::from(artifact_path);
@@ -543,7 +543,7 @@ async fn execute_training(
 /// Open text in $EDITOR, return edited content.
 fn edit_in_editor(content: &str) -> Result<String> {
     let tmp_dir = std::env::temp_dir();
-    let tmp_path = tmp_dir.join(format!("mods-train-{}.yaml", std::process::id()));
+    let tmp_path = tmp_dir.join(format!("modl-train-{}.yaml", std::process::id()));
     std::fs::write(&tmp_path, content)?;
 
     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());

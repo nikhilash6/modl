@@ -177,7 +177,7 @@ for 24GB VRAM. The adapter doesn't emit `qtype` yet.
 **Files**: `train_adapter.py`, potentially new video dataset handling
 
 ### Phase 6: Generation adapter for new models
-**Goal**: `mods generate` works with z-image, chroma, etc.
+**Goal**: `modl generate` works with z-image, chroma, etc.
 
 **Files**: `gen_adapter.py`
 

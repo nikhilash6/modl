@@ -1,12 +1,12 @@
 # Persistent Worker & Model Caching
 
-> **STATUS: PLANNED — Phase 2.** Current one-shot subprocess model works, but every `mods gen` pays a 20-45s cold start loading ~24GB of model weights into VRAM. This spec describes the persistent worker architecture that eliminates that overhead.
+> **STATUS: PLANNED — Phase 2.** Current one-shot subprocess model works, but every `modl gen` pays a 20-45s cold start loading ~24GB of model weights into VRAM. This spec describes the persistent worker architecture that eliminates that overhead.
 
 ---
 
 ## Problem
 
-Every `mods gen` invocation currently:
+Every `modl gen` invocation currently:
 
 1. Spawns a new Python process (~2-4s: import torch + diffusers)
 2. Loads model from disk (~15-30s: deserialize 24GB of safetensors)
@@ -24,14 +24,14 @@ ComfyUI solves this by being a long-running server. The model stays in VRAM betw
 ## Current Architecture (one-shot)
 
 ```
-mods gen "prompt"
+modl gen "prompt"
   │
   ▼
 LocalExecutor::submit_generate()
   │  write spec → /tmp/jobs/{id}.yaml
-  │  spawn: python -m mods_worker.main generate --config <spec.yaml>
+  │  spawn: python -m modl_worker.main generate --config <spec.yaml>
   ▼
-Python process (mods_worker/main.py)
+Python process (modl_worker/main.py)
   │  parse args → run_generate(config_path, emitter)
   │  load pipeline from scratch (from_pretrained / from_single_file)
   │  generate N images → emit artifact events
@@ -40,26 +40,26 @@ Python process (mods_worker/main.py)
 Process dies, VRAM freed, model gone
 ```
 
-`--count N` does reuse the loaded model within one invocation (1 cold load + N inference passes). But the next `mods gen` starts from zero.
+`--count N` does reuse the loaded model within one invocation (1 cold load + N inference passes). But the next `modl gen` starts from zero.
 
 ---
 
 ## Proposed Architecture (persistent worker)
 
 ```
-mods worker start             # or: spawned automatically on first gen
+modl worker start             # or: spawned automatically on first gen
   │
   ▼
-Python daemon (mods_worker/main.py serve)
-  │  listen on Unix socket: ~/.mods/worker.sock
+Python daemon (modl_worker/main.py serve)
+  │  listen on Unix socket: ~/.modl/worker.sock
   │  model cache: dict[CacheKey, Pipeline]
   │  idle timeout: 10 min (configurable)
   ▼
-mods gen "prompt"
+modl gen "prompt"
   │
   ▼
 LocalExecutor::submit_generate()
-  │  check: is worker alive? (connect to ~/.mods/worker.sock)
+  │  check: is worker alive? (connect to ~/.modl/worker.sock)
   │  YES → send spec over socket, read JSONL events back
   │  NO  → spawn worker, wait for ready, then send spec
   ▼
@@ -77,22 +77,22 @@ Two modes, both using the same worker process:
 
 | Mode | How | When |
 |------|-----|------|
-| **CLI flag** | `mods worker start` / `mods worker stop` / `mods worker status` | Manual control, power users |
-| **Auto-spawn** | `mods gen` detects no worker → spawns one in background | Default UX, zero friction |
-| **UI** | `mods serve` starts the worker as part of the web server | Future web UI |
+| **CLI flag** | `modl worker start` / `modl worker stop` / `modl worker status` | Manual control, power users |
+| **Auto-spawn** | `modl gen` detects no worker → spawns one in background | Default UX, zero friction |
+| **UI** | `modl serve` starts the worker as part of the web server | Future web UI |
 
 Auto-spawn detail:
-1. `LocalExecutor::submit_generate()` tries to connect to `~/.mods/worker.sock`
-2. Connection refused → spawn `python -m mods_worker.main serve` as a background process
-3. Write PID to `~/.mods/worker.pid`
+1. `LocalExecutor::submit_generate()` tries to connect to `~/.modl/worker.sock`
+2. Connection refused → spawn `python -m modl_worker.main serve` as a background process
+3. Write PID to `~/.modl/worker.pid`
 4. Retry socket connection with backoff (up to 30s for first model load)
 5. If spawn fails → fall back to one-shot mode (current behavior, always works)
 
 ### Worker lifecycle
 
 ```
-mods worker start [--timeout 600] [--model flux-dev]
-  │  bind ~/.mods/worker.sock
+modl worker start [--timeout 600] [--model flux-dev]
+  │  bind ~/.modl/worker.sock
   │  optionally pre-load a model (--model flag)
   │  emit ready signal
   ▼
@@ -101,7 +101,7 @@ mods worker start [--timeout 600] [--model flux-dev]
     │  reset idle timer after each job
     │  if idle_timeout exceeded → shutdown gracefully
   ▼
-mods worker stop
+modl worker stop
   │  send SIGTERM → worker emits cancelled, flushes, exits
   │  or: idle timeout → self-shutdown
 ```
@@ -112,22 +112,22 @@ mods worker stop
 
 ```bash
 # Manual worker management
-mods worker start                  # start persistent worker (background)
-mods worker start --timeout 1800   # 30 min idle timeout (default: 600s)
-mods worker start --model flux-dev # pre-load model into VRAM on startup
-mods worker stop                   # graceful shutdown
-mods worker status                 # show: running/stopped, loaded models, VRAM usage, uptime
+modl worker start                  # start persistent worker (background)
+modl worker start --timeout 1800   # 30 min idle timeout (default: 600s)
+modl worker start --model flux-dev # pre-load model into VRAM on startup
+modl worker stop                   # graceful shutdown
+modl worker status                 # show: running/stopped, loaded models, VRAM usage, uptime
 
 # Generation (auto-spawns worker if not running)
-mods gen "a cat"                   # connects to worker or spawns one
-mods gen "a cat" --no-worker       # force one-shot mode (legacy behavior)
+modl gen "a cat"                   # connects to worker or spawns one
+modl gen "a cat" --no-worker       # force one-shot mode (legacy behavior)
 ```
 
-### `mods worker status` output
+### `modl worker status` output
 
 ```
 Worker: running (PID 12345, uptime 8m)
-Socket: ~/.mods/worker.sock
+Socket: ~/.modl/worker.sock
 Models loaded:
   flux-dev (bf16, 23.8 GB VRAM)    last used: 2m ago
   └─ LoRA: brutalist-v1            fused, weight=1.0
@@ -177,7 +177,7 @@ Same JSONL events as current stdout protocol. Connection closed after terminal e
 ## Model Cache Design
 
 ```python
-# In mods_worker/serve.py (new file)
+# In modl_worker/serve.py (new file)
 
 @dataclass
 class CacheKey:
@@ -298,7 +298,7 @@ pipe.transformer = torch.compile(pipe.transformer, mode="reduce-overhead")
 
 ### Phase 1 (current): One-shot, works today
 
-- Every `mods gen` is a cold start
+- Every `modl gen` is a cold start
 - `--count N` reuses the model within one invocation
 - Acceptable for training (inherently long-running) and occasional generation
 
@@ -309,9 +309,9 @@ pipe.transformer = torch.compile(pipe.transformer, mode="reduce-overhead")
 - gen_adapter.py is stable and tested
 
 **Implementation order:**
-1. Add `serve` command to `mods_worker/main.py` with socket listener
+1. Add `serve` command to `modl_worker/main.py` with socket listener
 2. Add `ModelCache` class with LRU eviction
-3. Add `mods worker start/stop/status` CLI commands (Rust side)
+3. Add `modl worker start/stop/status` CLI commands (Rust side)
 4. Modify `LocalExecutor::submit_generate()` to prefer socket, fall back to one-shot
 5. Add auto-spawn logic (detect dead worker, spawn on first gen)
 6. Add idle timeout + graceful shutdown
@@ -322,10 +322,10 @@ pipe.transformer = torch.compile(pipe.transformer, mode="reduce-overhead")
 
 ### Phase 3: UI integration
 
-When `mods serve` launches the web UI, it also manages the worker:
+When `modl serve` launches the web UI, it also manages the worker:
 
 ```
-mods serve
+modl serve
   ├── HTTP server (Rust, serves UI)
   ├── WebSocket bridge (Rust → worker socket → UI)
   └── Worker process (Python, persistent, auto-managed)
@@ -359,14 +359,14 @@ The persistent worker transforms interactive generation from "wait 40s, get imag
 
 | File | Change |
 |------|--------|
-| `python/mods_worker/main.py` | Add `serve` subcommand |
-| `python/mods_worker/serve.py` | **New.** Socket listener, ModelCache, serve loop |
-| `python/mods_worker/adapters/gen_adapter.py` | Accept optional pre-loaded pipeline arg |
+| `python/modl_worker/main.py` | Add `serve` subcommand |
+| `python/modl_worker/serve.py` | **New.** Socket listener, ModelCache, serve loop |
+| `python/modl_worker/adapters/gen_adapter.py` | Accept optional pre-loaded pipeline arg |
 | `src/cli/mod.rs` | Add `worker` subcommand group |
 | `src/cli/worker.rs` | **New.** `start`, `stop`, `status` commands |
 | `src/core/executor.rs` | `submit_generate()` try socket first, fall back to one-shot |
 
 No changes to:
 - `src/core/job.rs` (spec format unchanged)
-- `python/mods_worker/protocol.py` (JSONL format unchanged)
+- `python/modl_worker/protocol.py` (JSONL format unchanged)
 - `src/cli/train.rs` (training stays one-shot — inherently long-running)

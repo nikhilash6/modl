@@ -75,7 +75,7 @@ struct DatasetImage {
 // ---------------------------------------------------------------------------
 
 pub async fn start(port: u16, open_browser: bool) -> Result<()> {
-    // Kill any existing server on this port so `mods preview` is always re-entrant
+    // Kill any existing server on this port so `modl preview` is always re-entrant
     kill_existing_on_port(port);
 
     let app = Router::new()
@@ -139,10 +139,10 @@ fn kill_existing_on_port(port: u16) {
     }
 }
 
-fn mods_root() -> PathBuf {
+fn modl_root() -> PathBuf {
     dirs::home_dir()
         .expect("Could not determine home directory")
-        .join(".mods")
+        .join(".modl")
 }
 
 /// Parse step number from sample filename like `1772410330707__000000000_0.jpg`
@@ -190,7 +190,7 @@ fn infer_prompt_count(images: &[String]) -> usize {
 
 /// Scan a training output directory for sample images grouped by step
 fn scan_training_run(name: &str) -> Result<TrainingRun> {
-    let run_dir = mods_root().join("training_output").join(name).join(name);
+    let run_dir = modl_root().join("training_output").join(name).join(name);
 
     // Parse config
     let config_path = run_dir.join("config.yaml");
@@ -335,7 +335,7 @@ fn build_lineage(lora_name: &str) -> Option<TrainingLineage> {
 // ---------------------------------------------------------------------------
 
 async fn api_list_runs() -> impl IntoResponse {
-    let output_dir = mods_root().join("training_output");
+    let output_dir = modl_root().join("training_output");
     let mut runs = Vec::new();
 
     if output_dir.exists()
@@ -460,16 +460,16 @@ async fn api_get_dataset(
     }
 }
 
-/// Serve files from ~/.mods/ (images, samples, etc.)
+/// Serve files from ~/.modl/ (images, samples, etc.)
 async fn serve_file(Path(path): Path<String>) -> impl IntoResponse {
-    let full_path = mods_root().join(&path);
+    let full_path = modl_root().join(&path);
 
-    // Security: ensure resolved path is still under mods_root
+    // Security: ensure resolved path is still under modl_root
     let canonical = match full_path.canonicalize() {
         Ok(p) => p,
         Err(_) => return (StatusCode::NOT_FOUND, "Not found").into_response(),
     };
-    let root_canonical = match mods_root().canonicalize() {
+    let root_canonical = match modl_root().canonicalize() {
         Ok(p) => p,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Config error").into_response(),
     };

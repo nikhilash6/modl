@@ -380,7 +380,7 @@ Run on the 4090. Validate full flow: prompt → Python subprocess → image → 
 ### Step 2: Persistent worker — Python side (~3-4 days)
 > **Prereq:** Step 1
 
-`python/mods_worker/serve.py` — Unix socket daemon, ModelCache, LoRA hot-swap, idle timeout. See `persistent-worker.md`.
+`python/modl_worker/serve.py` — Unix socket daemon, ModelCache, LoRA hot-swap, idle timeout. See `persistent-worker.md`.
 
 ### Step 3: Persistent worker — Rust side (~2 days)
 > **Prereq:** Step 2

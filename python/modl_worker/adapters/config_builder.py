@@ -1,6 +1,6 @@
-"""Build ai-toolkit config from a mods TrainJobSpec.
+"""Build ai-toolkit config from a modl TrainJobSpec.
 
-Responsible for translating mods spec fields into the YAML structure that
+Responsible for translating modl spec fields into the YAML structure that
 ai-toolkit's ``run.py`` expects.  All architecture-specific logic is driven
 by the tables in ``arch_config.py`` rather than ad-hoc conditionals.
 """
@@ -53,7 +53,7 @@ def read_original_intervals(checkpoint_path: str) -> tuple[int | None, int | Non
             interval = nonzero[0]
 
     if interval:
-        print(f"[mods] Preserving original intervals: save_every={interval}, sample_every={interval}")
+        print(f"[modl] Preserving original intervals: save_every={interval}, sample_every={interval}")
         return interval, interval
 
     return None, None
@@ -123,17 +123,17 @@ def build_train_block(arch_key: str, params: dict, lora_type: str) -> dict:
 
     # Z-Image: LR must not exceed 1e-4 — higher values break the distillation
     if is_zimage and lr > 1e-4:
-        print(f"[mods] WARNING: Clamping LR from {lr} to 1e-4 for Z-Image (higher LR breaks distillation)")
+        print(f"[modl] WARNING: Clamping LR from {lr} to 1e-4 for Z-Image (higher LR breaks distillation)")
         lr = 1e-4
 
     # Qwen-Image guidance notes
     if is_qwen:
         if lora_type == "style" and lr < 2e-4:
             # Per Ostris: style LoRAs converge faster at 2e-4 (bumped from 1e-4)
-            print(f"[mods] NOTE: Qwen-Image style LoRAs often converge faster at lr=2e-4 (current: {lr})")
+            print(f"[modl] NOTE: Qwen-Image style LoRAs often converge faster at lr=2e-4 (current: {lr})")
         if lora_type == "character":
             if steps < 3000:
-                print(f"[mods] NOTE: Qwen-Image character LoRAs usually need ~3000+ steps (current: {steps})")
+                print(f"[modl] NOTE: Qwen-Image character LoRAs usually need ~3000+ steps (current: {steps})")
             # Character training on 24GB is not currently supported well.
             # uint6 needs ~30GB; int4 has severe degradation.
             # No LR bump needed — 1e-4 with rank 16 is the tested recipe.
@@ -209,7 +209,7 @@ def build_sample_block(
 def spec_to_aitoolkit_config(spec: dict) -> dict:
     """Translate a TrainJobSpec (parsed from YAML) into ai-toolkit's config format.
 
-    This is the single place to maintain the mapping between mods spec fields
+    This is the single place to maintain the mapping between modl spec fields
     and ai-toolkit's expected YAML configuration.
     """
     params = spec.get("params", {})
@@ -255,7 +255,7 @@ def spec_to_aitoolkit_config(spec: dict) -> dict:
     original_sample_every = None
     if resume_from:
         network_config["pretrained_lora_path"] = resume_from
-        print(f"[mods] Resuming training from checkpoint: {resume_from}")
+        print(f"[modl] Resuming training from checkpoint: {resume_from}")
         original_save_every, original_sample_every = read_original_intervals(resume_from)
 
     # Dataset repeats & caption dropout
@@ -273,7 +273,7 @@ def spec_to_aitoolkit_config(spec: dict) -> dict:
         # Qwen character training, re-enable caption_dropout for that path.
         if caption_dropout > 0:
             print(
-                f"[mods] NOTE: For Qwen-Image with cached text embeddings, "
+                f"[modl] NOTE: For Qwen-Image with cached text embeddings, "
                 f"forcing caption_dropout_rate=0.0 (requested {caption_dropout})."
             )
         caption_dropout = 0.0
@@ -342,24 +342,24 @@ def _apply_qwen_model_config(model_config: dict, lora_type: str) -> None:
     if lora_type == "style":
         # Style: 3-bit + ARA fits 24GB (~23GB used on RTX 4090)
         print(
-            f"[mods] Qwen-Image style profile: qtype={qtype}, cache_text_embeddings=true "
+            f"[modl] Qwen-Image style profile: qtype={qtype}, cache_text_embeddings=true "
             "(targets ~23GB VRAM on 1024px — fits RTX 3090/4090 24GB)"
         )
         print(
-            "[mods] NOTE: Qwen style LoRAs work best with literal captions and usually no trigger word."
+            "[modl] NOTE: Qwen style LoRAs work best with literal captions and usually no trigger word."
         )
     else:
         # Character/object: uint6 needs ~30GB (RTX 5090 32GB class)
         print(
-            f"[mods] Qwen-Image character/object profile: qtype={qtype}, cache_text_embeddings=true "
+            f"[modl] Qwen-Image character/object profile: qtype={qtype}, cache_text_embeddings=true "
             "(targets ~30GB VRAM on 1024px — needs 32GB-class GPU, e.g. RTX 5090)"
         )
         if qtype == QWEN_32GB_DEFAULT_QTYPE:
             print(
-                "[mods] WARNING: Qwen-Image character/object training requires ~30GB VRAM with uint6.\n"
+                "[modl] WARNING: Qwen-Image character/object training requires ~30GB VRAM with uint6.\n"
                 "  24GB cards (RTX 3090/4090) will likely OOM. Options:\n"
                 "  - Use a 32GB+ GPU (recommended)\n"
                 "  - For style LoRAs, switch to --lora-type style (uses 3-bit+ARA, fits 24GB)\n"
-                f"  - Override with MODS_QWEN_QTYPE='{QWEN_24GB_STYLE_QTYPE}' (3-bit+ARA, "
+                f"  - Override with MODL_QWEN_QTYPE='{QWEN_24GB_STYLE_QTYPE}' (3-bit+ARA, "
                 "may work but quality untested for character/object)"
             )

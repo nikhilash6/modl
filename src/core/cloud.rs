@@ -128,7 +128,7 @@ fn print_cloud_waitlist(action: &str, provider: CloudProvider) {
     eprintln!(
         "  so you can run {} without owning hardware.",
         style(format!(
-            "mods {} --cloud --provider {}",
+            "modl {} --cloud --provider {}",
             if action == "training" {
                 "train"
             } else {
@@ -173,7 +173,7 @@ fn resolve_api_key(provider: CloudProvider) -> Result<String> {
         }
     }
 
-    // Try loading from mods config
+    // Try loading from modl config
     if let Ok(config) = crate::core::config::Config::load()
         && let Some(ref cloud) = config.cloud
     {
@@ -190,7 +190,7 @@ fn resolve_api_key(provider: CloudProvider) -> Result<String> {
     }
 
     bail!(
-        "No API key found for {}. Set {} or add it to ~/.mods/config.yaml under cloud.",
+        "No API key found for {}. Set {} or add it to ~/.modl/config.yaml under cloud.",
         provider,
         env_vars.join(" / ")
     );

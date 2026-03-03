@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Define transport-agnostic, backend-neutral schemas for all executable jobs in `mods`.
+Define transport-agnostic, backend-neutral schemas for all executable jobs in `modl`.
 
 Design goals:
 - One schema for local and cloud
@@ -66,17 +66,17 @@ Design goals:
   "correlation_id": "optional-string",
   "dataset": {
     "name": "products",
-    "path": "/home/user/.mods/datasets/products",
+    "path": "/home/user/.modl/datasets/products",
     "image_count": 12,
     "caption_coverage": 0.83
   },
   "model": {
     "base_model_id": "flux-schnell",
-    "base_model_path": "/home/user/.mods/store/.../flux-schnell.safetensors"
+    "base_model_path": "/home/user/.modl/store/.../flux-schnell.safetensors"
   },
   "output": {
     "lora_name": "product-v1",
-    "destination_dir": "/home/user/.mods/outputs/training"
+    "destination_dir": "/home/user/.modl/outputs/training"
   },
   "training": {
     "preset": "standard",
@@ -124,7 +124,7 @@ Validation rules:
     "base_model_id": "flux-schnell",
     "lora": {
       "id": "product-v1",
-      "path": "/home/user/.mods/store/.../product-v1.safetensors",
+      "path": "/home/user/.modl/store/.../product-v1.safetensors",
       "strength": 1.0
     }
   },
@@ -198,7 +198,7 @@ Ordering guarantees:
   "job_id": "01JT8Q...",
   "artifact_id": "01JT8R...",
   "kind": "lora",
-  "path": "/home/user/.mods/store/.../product-v1.safetensors",
+  "path": "/home/user/.modl/store/.../product-v1.safetensors",
   "uri": null,
   "sha256": "...",
   "size_bytes": 123456789,
@@ -220,7 +220,7 @@ Include optional `upstream_job_ids` in all specs:
 "upstream_job_ids": ["01JT8Q...", "01JT8R..."]
 ```
 
-This enables future `mods pipeline` orchestration without changing the core schema family.
+This enables future `modl pipeline` orchestration without changing the core schema family.
 
 ---
 

@@ -13,8 +13,8 @@ CLI (train.rs)
   ▼
 LocalExecutor (executor.rs)
   │  serialize spec → YAML → /tmp/jobs/{id}.yaml
-  │  spawn: python -m mods_worker.main train --config <spec.yaml>
-  │  env: PYTHONPATH=mods_worker:ai-toolkit, MODS_AITOOLKIT_ROOT=~/.mods/runtime/ai-toolkit
+  │  spawn: python -m modl_worker.main train --config <spec.yaml>
+  │  env: PYTHONPATH=modl_worker:ai-toolkit, MODL_AITOOLKIT_ROOT=~/.modl/runtime/ai-toolkit
   ▼
 Python worker (main.py → train_adapter.py)
   │  spec_to_aitoolkit_config(spec) → ai-toolkit's nested YAML
@@ -27,7 +27,7 @@ ai-toolkit (run.py → ExtensionJob → SDTrainer)
   ▼
 Rust event loop (train.rs)
   │  read JSON events → progress bar, DB persistence
-  │  on completion: collect .safetensors → ~/.mods/store/
+  │  on completion: collect .safetensors → ~/.modl/store/
 ```
 
 ### Key files
@@ -38,14 +38,14 @@ Rust event loop (train.rs)
 | `src/core/presets.rs` | Pure functions: dataset stats + GPU info → training params |
 | `src/core/job.rs` | `TrainJobSpec`, `TrainingParams`, `ModelRef`, serialization |
 | `src/core/executor.rs` | `LocalExecutor`: spawn Python worker, parse events |
-| `python/mods_worker/adapters/train_adapter.py` | `spec_to_aitoolkit_config()` — the mapping function |
-| `python/mods_worker/protocol.py` | `EventEmitter` — JSON-line protocol over stdout |
+| `python/modl_worker/adapters/train_adapter.py` | `spec_to_aitoolkit_config()` — the mapping function |
+| `python/modl_worker/protocol.py` | `EventEmitter` — JSON-line protocol over stdout |
 
 ---
 
-## Current Mapping: Mods Spec → ai-toolkit Config
+## Current Mapping: Modl Spec → ai-toolkit Config
 
-| Mods spec field | ai-toolkit config path | Status |
+| Modl spec field | ai-toolkit config path | Status |
 |---|---|---|
 | `model.base_model_id` | `process[0].model.name_or_path` | ✅ Translated via `HF_MODEL_MAP` for Flux |
 | `model.base_model_path` | `process[0].model.name_or_path` (fallback) | ✅ Used for non-Flux |
@@ -125,7 +125,7 @@ ai-toolkit has two model loading systems:
 | `z_image` | `ZImageModel` | Z-Image |
 | `f_light` | `FLiteModel` | Lightweight |
 
-### What mods currently supports
+### What modl currently supports
 
 | Model | Status | Notes |
 |-------|--------|-------|
@@ -280,7 +280,7 @@ Quick reference for what each model family needs in ai-toolkit config:
 
 ## What Needs to Change (file-by-file)
 
-### `python/mods_worker/adapters/train_adapter.py`
+### `python/modl_worker/adapters/train_adapter.py`
 
 1. **Add `MODEL_PROFILES` dict** with per-model defaults (scheduler, dtype, quantize, sampler, guidance, resolution)
 2. **Replace `is_flux` branches** with profile lookups
@@ -312,11 +312,11 @@ Each new model profile should be testable without a GPU:
 
 ```bash
 # Generate the spec (no GPU needed)
-mods train --dataset test --base sdxl --preset quick --dry-run
+modl train --dataset test --base sdxl --preset quick --dry-run
 
 # Translate to ai-toolkit config (no GPU needed)
 python -c "
-from mods_worker.adapters.train_adapter import spec_to_aitoolkit_config
+from modl_worker.adapters.train_adapter import spec_to_aitoolkit_config
 import yaml
 spec = yaml.safe_load(open('spec.yaml'))
 print(yaml.dump(spec_to_aitoolkit_config(spec)))

@@ -14,7 +14,7 @@ import os
 import time
 from pathlib import Path
 
-from mods_worker.protocol import EventEmitter
+from modl_worker.protocol import EventEmitter
 
 
 # ---------------------------------------------------------------------------
@@ -246,5 +246,5 @@ _HF_MODEL_IDS = {
 
 
 def _hf_id_for_model(base_model_id: str) -> str:
-    """Map a mods model ID to a HuggingFace repo ID."""
+    """Map a modl model ID to a HuggingFace repo ID."""
     return _HF_MODEL_IDS.get(base_model_id, base_model_id)

@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 
 class EventEmitter:
-    def __init__(self, source: str = "mods_worker", job_id: str | None = None) -> None:
+    def __init__(self, source: str = "modl_worker", job_id: str | None = None) -> None:
         self.source = source
         self.job_id = job_id or ""
         self.sequence = 0
@@ -85,7 +85,7 @@ def fatal(message: str, exit_code: int = 1) -> None:
                 "schema_version": "v1",
                 "sequence": 1,
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "source": "mods_worker",
+                "source": "modl_worker",
                 "event": {
                     "type": "error",
                     "code": "WORKER_INTERNAL_ERROR",

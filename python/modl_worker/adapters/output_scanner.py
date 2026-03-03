@@ -6,7 +6,7 @@ import os
 import re
 from pathlib import Path
 
-from mods_worker.protocol import EventEmitter
+from modl_worker.protocol import EventEmitter
 
 
 def scan_output_artifacts(output_dir: str, emitter: EventEmitter) -> None:
@@ -15,7 +15,7 @@ def scan_output_artifacts(output_dir: str, emitter: EventEmitter) -> None:
     ai-toolkit saves checkpoints as ``{name}_000002000.safetensors`` and the
     final output as ``{name}.safetensors``.  We only register the final one in
     the DB — checkpoints stay on disk for manual comparison but don't
-    clutter ``mods model ls``.
+    clutter ``modl model ls``.
     """
     pattern = os.path.join(output_dir, "**", "*.safetensors")
     all_files = sorted(glob.glob(pattern, recursive=True))

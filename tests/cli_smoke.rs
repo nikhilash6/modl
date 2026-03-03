@@ -2,8 +2,8 @@ use assert_cmd::Command;
 use predicates::str::contains;
 
 #[allow(deprecated)]
-fn mods_cmd() -> Command {
-    Command::cargo_bin("mods").unwrap()
+fn modl_cmd() -> Command {
+    Command::cargo_bin("modl").unwrap()
 }
 
 // ---------------------------------------------------------------------------
@@ -12,7 +12,7 @@ fn mods_cmd() -> Command {
 
 #[test]
 fn help_shows_description() {
-    mods_cmd()
+    modl_cmd()
         .arg("--help")
         .assert()
         .success()
@@ -21,16 +21,16 @@ fn help_shows_description() {
 
 #[test]
 fn version_flag() {
-    mods_cmd()
+    modl_cmd()
         .arg("--version")
         .assert()
         .success()
-        .stdout(contains("mods"));
+        .stdout(contains("modl"));
 }
 
 #[test]
 fn invalid_subcommand_fails() {
-    mods_cmd().arg("yolo").assert().failure();
+    modl_cmd().arg("yolo").assert().failure();
 }
 
 // ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ fn invalid_subcommand_fails() {
 
 #[test]
 fn model_ls_rejects_invalid_type() {
-    mods_cmd()
+    modl_cmd()
         .args(["model", "ls", "--type", "banana"])
         .assert()
         .failure()
@@ -48,7 +48,7 @@ fn model_ls_rejects_invalid_type() {
 
 #[test]
 fn model_ls_accepts_valid_type() {
-    let result = mods_cmd().args(["model", "ls", "--type", "lora"]).assert();
+    let result = modl_cmd().args(["model", "ls", "--type", "lora"]).assert();
 
     // We just verify it doesn't fail with a clap error
     let output = result.get_output();
@@ -61,7 +61,7 @@ fn model_ls_accepts_valid_type() {
 
 #[test]
 fn model_search_rejects_invalid_type() {
-    mods_cmd()
+    modl_cmd()
         .args(["model", "search", "flux", "--type", "nope"])
         .assert()
         .failure()
@@ -70,7 +70,7 @@ fn model_search_rejects_invalid_type() {
 
 #[test]
 fn auth_rejects_invalid_provider() {
-    mods_cmd()
+    modl_cmd()
         .args(["auth", "dropbox"])
         .assert()
         .failure()
@@ -79,7 +79,7 @@ fn auth_rejects_invalid_provider() {
 
 #[test]
 fn train_rejects_invalid_provider() {
-    mods_cmd()
+    modl_cmd()
         .args(["train", "--provider", "aws"])
         .assert()
         .failure()
@@ -88,7 +88,7 @@ fn train_rejects_invalid_provider() {
 
 #[test]
 fn train_rejects_invalid_preset() {
-    mods_cmd()
+    modl_cmd()
         .args(["train", "--preset", "extreme"])
         .assert()
         .failure()
@@ -97,7 +97,7 @@ fn train_rejects_invalid_preset() {
 
 #[test]
 fn generate_rejects_invalid_provider() {
-    mods_cmd()
+    modl_cmd()
         .args(["generate", "a cat", "--provider", "lambda"])
         .assert()
         .failure()
@@ -110,7 +110,7 @@ fn generate_rejects_invalid_provider() {
 
 #[test]
 fn model_ls_accepts_textencoder_alias() {
-    let result = mods_cmd()
+    let result = modl_cmd()
         .args(["model", "ls", "--type", "textencoder"])
         .assert();
 

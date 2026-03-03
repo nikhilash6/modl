@@ -159,7 +159,7 @@ async fn run_list() -> Result<()> {
 
     if datasets.is_empty() {
         println!("No datasets found. Create one with:");
-        println!("  mods datasets create <name> --from <dir>");
+        println!("  modl datasets create <name> --from <dir>");
         return Ok(());
     }
 
@@ -380,7 +380,7 @@ async fn spawn_dataset_worker(
 
     let runtime_root = dirs::home_dir()
         .expect("Could not determine home directory")
-        .join(".mods")
+        .join(".modl")
         .join("runtime");
     let jobs_dir = runtime_root.join("jobs");
     std::fs::create_dir_all(&jobs_dir)
@@ -398,7 +398,7 @@ async fn spawn_dataset_worker(
     // Resolve Python
     let setup = runtime::setup_training(false).await?;
     if !setup.ready {
-        anyhow::bail!("Python runtime is not ready. Run `mods train setup` first.");
+        anyhow::bail!("Python runtime is not ready. Run `modl train setup` first.");
     }
 
     let worker_root = resolve_worker_python_root()?;
@@ -414,7 +414,7 @@ async fn spawn_dataset_worker(
 
     let mut child = Command::new(&setup.python_path)
         .arg("-m")
-        .arg("mods_worker.main")
+        .arg("modl_worker.main")
         .arg(worker_command)
         .arg("--config")
         .arg(&spec_path)
@@ -718,7 +718,7 @@ async fn run_prepare(
         println!(
             "\n  Next: {} to train a LoRA",
             style(format!(
-                "mods train --dataset {name} --base flux-dev --trigger <word>"
+                "modl train --dataset {name} --base flux-dev --trigger <word>"
             ))
             .bold()
         );

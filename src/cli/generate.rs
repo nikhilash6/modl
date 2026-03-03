@@ -68,7 +68,7 @@ fn resolve_lora(name: &str, db: &Database) -> Result<Option<LoraRef>> {
     }
 
     anyhow::bail!(
-        "LoRA not found: {name}. Use `mods model ls --type lora` to see installed LoRAs, or provide a file path."
+        "LoRA not found: {name}. Use `modl model ls --type lora` to see installed LoRAs, or provide a file path."
     );
 }
 
@@ -148,12 +148,12 @@ pub async fn run(
     };
 
     // -------------------------------------------------------------------
-    // Build output directory: ~/.mods/outputs/<date>/
+    // Build output directory: ~/.modl/outputs/<date>/
     // -------------------------------------------------------------------
     let date = chrono::Local::now().format("%Y-%m-%d");
     let output_dir = dirs::home_dir()
         .expect("Could not determine home directory")
-        .join(".mods")
+        .join(".modl")
         .join("outputs")
         .join(date.to_string());
     std::fs::create_dir_all(&output_dir)?;

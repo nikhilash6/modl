@@ -68,13 +68,13 @@ impl LocalExecutor {
         if !setup.ready {
             bail!(
                 "Training runtime is not ready. ai-toolkit command could not be detected. \
-                 Run `mods train-setup --reinstall` or set MODS_AITOOLKIT_TRAIN_CMD."
+                 Run `modl train-setup --reinstall` or set MODL_AITOOLKIT_TRAIN_CMD."
             );
         }
 
         let runtime_root = dirs::home_dir()
             .expect("Could not determine home directory")
-            .join(".mods")
+            .join(".modl")
             .join("runtime");
 
         Ok(Self::new(setup.python_path, runtime_root))
@@ -114,7 +114,7 @@ impl Executor for LocalExecutor {
         let mut command = Command::new(&self.python_path);
         command
             .arg("-m")
-            .arg("mods_worker.main")
+            .arg("modl_worker.main")
             .arg("train")
             .arg("--config")
             .arg(&spec_path)
@@ -126,11 +126,11 @@ impl Executor for LocalExecutor {
 
         // Tell the Python worker where ai-toolkit lives so it can invoke run.py
         if let Ok(Some(ref aitk_dir)) = runtime::aitoolkit_path() {
-            command.env("MODS_AITOOLKIT_ROOT", aitk_dir);
+            command.env("MODL_AITOOLKIT_ROOT", aitk_dir);
         }
 
         if let Ok(Some(template)) = runtime::train_command_template() {
-            command.env("MODS_AITOOLKIT_TRAIN_CMD", template);
+            command.env("MODL_AITOOLKIT_TRAIN_CMD", template);
         }
 
         let mut child = command.spawn().with_context(|| {
@@ -205,7 +205,7 @@ impl Executor for LocalExecutor {
         let mut command = Command::new(&self.python_path);
         command
             .arg("-m")
-            .arg("mods_worker.main")
+            .arg("modl_worker.main")
             .arg("generate")
             .arg("--config")
             .arg(&spec_path)
@@ -310,7 +310,7 @@ pub(crate) fn read_worker_stderr(
             job_id: job_id.into(),
             sequence: 0,
             timestamp: chrono::Utc::now().to_rfc3339(),
-            source: "mods_worker".into(),
+            source: "modl_worker".into(),
             event: EventPayload::Log {
                 level: "stderr".into(),
                 message: line,
@@ -354,7 +354,7 @@ pub(crate) fn read_worker_stdout(
                         job_id: job_id.into(),
                         sequence: 0,
                         timestamp: chrono::Utc::now().to_rfc3339(),
-                        source: "mods_worker".into(),
+                        source: "modl_worker".into(),
                         event: EventPayload::Log {
                             level: "info".into(),
                             message: line,
@@ -372,7 +372,7 @@ pub(crate) fn read_worker_stdout(
                     job_id: job_id.into(),
                     sequence: 0,
                     timestamp: chrono::Utc::now().to_rfc3339(),
-                    source: "mods_worker".into(),
+                    source: "modl_worker".into(),
                     event: EventPayload::Log {
                         level: "info".into(),
                         message: line,
@@ -405,7 +405,7 @@ pub(crate) fn parse_worker_event(raw: &serde_json::Value, job_id: &str) -> Optio
     let source = raw
         .get("source")
         .and_then(|v| v.as_str())
-        .unwrap_or("mods_worker")
+        .unwrap_or("modl_worker")
         .to_string();
     let raw_job_id = raw
         .get("job_id")
@@ -541,7 +541,7 @@ mod tests {
             "schema_version": "v1",
             "sequence": 5,
             "timestamp": "2026-01-01T00:00:00Z",
-            "source": "mods_worker",
+            "source": "modl_worker",
             "event": {
                 "type": "progress",
                 "stage": "train",
@@ -574,7 +574,7 @@ mod tests {
             "schema_version": "v1",
             "sequence": 10,
             "timestamp": "2026-01-01T01:00:00Z",
-            "source": "mods_worker",
+            "source": "modl_worker",
             "event": {
                 "type": "completed",
                 "message": "Training finished"
@@ -595,7 +595,7 @@ mod tests {
             "schema_version": "v1",
             "sequence": 3,
             "timestamp": "2026-01-01T00:05:00Z",
-            "source": "mods_worker",
+            "source": "modl_worker",
             "event": {
                 "type": "error",
                 "code": "TRAINING_FAILED",
@@ -623,7 +623,7 @@ mod tests {
             "schema_version": "v1",
             "sequence": 8,
             "timestamp": "2026-01-01T00:50:00Z",
-            "source": "mods_worker",
+            "source": "modl_worker",
             "event": {
                 "type": "artifact",
                 "path": "/tmp/output/lora.safetensors",
@@ -653,7 +653,7 @@ mod tests {
             "schema_version": "v1",
             "sequence": 1,
             "timestamp": "2026-01-01T00:00:00Z",
-            "source": "mods_worker",
+            "source": "modl_worker",
             "event": {
                 "type": "some_future_event",
                 "data": "foo"

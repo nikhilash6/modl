@@ -17,8 +17,8 @@ pub fn check_runtime() -> Result<()> {
         bail!(
             "Training runtime is not installed.\n\n\
              Run this first:\n\n  \
-             mods runtime install\n  \
-             mods train setup\n\n\
+             modl runtime install\n  \
+             modl train setup\n\n\
              This installs a managed Python environment with PyTorch and ai-toolkit."
         );
     }
@@ -39,9 +39,9 @@ pub fn check_base_model(base_model_id: &str) -> Result<()> {
         bail!(
             "Base model '{}' is not installed.\n\n\
              Pull it first:\n\n  \
-             mods model pull {}\n\n\
+             modl model pull {}\n\n\
              Or see available models:\n\n  \
-             mods model search \"{}\"",
+             modl model search \"{}\"",
             base_model_id,
             base_model_id,
             base_model_id.split('-').next().unwrap_or(base_model_id)
@@ -67,7 +67,7 @@ pub fn check_auth_if_gated(base_model_id: &str) -> Result<()> {
         bail!(
             "Model '{}' requires HuggingFace authentication.\n\n\
              Set up auth first:\n\n  \
-             mods auth huggingface\n\n\
+             modl auth huggingface\n\n\
              You'll need to accept the model's terms at huggingface.co \
              and provide an access token.",
             base_model_id

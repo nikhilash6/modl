@@ -3,12 +3,12 @@ import os
 import sys
 from pathlib import Path
 
-from mods_worker.adapters import run_train, run_generate, run_caption, run_resize, run_tag
-from mods_worker.protocol import EventEmitter, fatal
+from modl_worker.adapters import run_train, run_generate, run_caption, run_resize, run_tag
+from modl_worker.protocol import EventEmitter, fatal
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="mods_worker")
+    parser = argparse.ArgumentParser(prog="modl_worker")
     sub = parser.add_subparsers(dest="command", required=True)
 
     train = sub.add_parser("train", help="Run training adapter")
@@ -39,7 +39,7 @@ def main() -> int:
     args = parser.parse_args()
 
     job_id = getattr(args, "job_id", "") or ""
-    emitter = EventEmitter(source="mods_worker", job_id=job_id)
+    emitter = EventEmitter(source="modl_worker", job_id=job_id)
 
     if args.command == "train":
         config_path = Path(args.config)

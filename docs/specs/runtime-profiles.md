@@ -9,7 +9,7 @@
 
 ## Purpose
 
-Define how `mods` describes, resolves, installs, verifies, and upgrades managed embedded Python runtimes.
+Define how `modl` describes, resolves, installs, verifies, and upgrades managed embedded Python runtimes.
 
 Phase 1 scope:
 - Linux only
@@ -44,7 +44,7 @@ A profile defines:
 ## Directory Layout
 
 ```text
-~/.mods/runtime/
+~/.modl/runtime/
   python/
     3.11.11/
       bin/python
@@ -66,7 +66,7 @@ A profile defines:
 
 ## Manifest Index Schema
 
-File: `~/.mods/runtime/manifests/index.json`
+File: `~/.modl/runtime/manifests/index.json`
 
 ```json
 {
@@ -77,7 +77,7 @@ File: `~/.mods/runtime/manifests/index.json`
     {
       "id": "trainer-cu124",
       "version": "2026.02.1",
-      "manifest_uri": "https://github.com/modshq/mods-runtime-manifests/releases/download/v2026.02.1/trainer-cu124.json",
+      "manifest_uri": "https://github.com/modl/modl-runtime-manifests/releases/download/v2026.02.1/trainer-cu124.json",
       "sha256": "..."
     }
   ]
@@ -107,7 +107,7 @@ File: `~/.mods/runtime/manifests/index.json`
   },
   "python": {
     "version": "3.11.11",
-    "artifact_uri": "https://github.com/modshq/mods-runtime-manifests/releases/download/v2026.02.1/cpython-3.11.11-linux-x86_64.tar.zst",
+    "artifact_uri": "https://github.com/modl/modl-runtime-manifests/releases/download/v2026.02.1/cpython-3.11.11-linux-x86_64.tar.zst",
     "sha256": "..."
   },
   "packages": [
@@ -125,7 +125,7 @@ File: `~/.mods/runtime/manifests/index.json`
     }
   ],
   "entrypoints": {
-    "worker": "mods_worker.main"
+    "worker": "modl_worker.main"
   }
 }
 ```
@@ -134,7 +134,7 @@ File: `~/.mods/runtime/manifests/index.json`
 
 ## Runtime Lock Schema
 
-File: `~/.mods/runtime/locks/runtime.lock.json`
+File: `~/.modl/runtime/locks/runtime.lock.json`
 
 ```json
 {
@@ -170,7 +170,7 @@ File: `~/.mods/runtime/locks/runtime.lock.json`
 7. Verify hashes for all artifacts
 8. Install venv and packages
 9. Write `runtime.lock.json`
-10. Run post-install health checks (`mods runtime doctor`)
+10. Run post-install health checks (`modl runtime doctor`)
 
 Failure at any step is atomic for lock creation.
 
@@ -181,22 +181,22 @@ Launch sources:
 - Python ecosystem packages: PyPI (or direct files.pythonhosted.org artifacts)
 - PyTorch GPU wheels: official PyTorch wheel index
 
-No `cdn.mods.sh` dependency in launch path.
+No `cdn.modl.sh` dependency in launch path.
 
 ---
 
 ## Commands Contract
 
-## `mods runtime install [--profile ID] [--channel stable|beta]`
+## `modl runtime install [--profile ID] [--channel stable|beta]`
 
 - Installs or updates profile
 - Prints expected download size before confirmation unless `--yes`
 
-## `mods runtime status`
+## `modl runtime status`
 
 - Prints installed profile/version, lock status, health summary
 
-## `mods runtime doctor`
+## `modl runtime doctor`
 
 Checks:
 - Python executable health
@@ -204,12 +204,12 @@ Checks:
 - CUDA availability for selected profile
 - worker entrypoint viability
 
-## `mods runtime upgrade`
+## `modl runtime upgrade`
 
 - Moves to latest compatible version in channel
 - Preserves previous lock for rollback
 
-## `mods runtime reset`
+## `modl runtime reset`
 
 - Deletes env + lock for selected profile
 - Keeps manifests/wheel cache unless `--purge-cache`

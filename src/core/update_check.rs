@@ -1,7 +1,7 @@
 //! Background update check — runs at most once per 24 hours.
 //!
 //! On every CLI invocation, we spawn a non-blocking check that:
-//! 1. Reads a cached timestamp from `~/.mods/update-check.json`
+//! 1. Reads a cached timestamp from `~/.modl/update-check.json`
 //! 2. If < 24h old, skips the network call entirely
 //! 3. Otherwise, hits the GitHub releases API (15s timeout)
 //! 4. Writes back the result (latest version + timestamp)
@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const REPO: &str = "modshq-org/mods";
+const REPO: &str = "modl-org/modl";
 const CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60; // 24 hours
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,7 +31,7 @@ struct UpdateCache {
 fn cache_path() -> PathBuf {
     dirs::home_dir()
         .expect("Could not determine home directory")
-        .join(".mods")
+        .join(".modl")
         .join("update-check.json")
 }
 
@@ -95,7 +95,7 @@ async fn check_and_cache() -> Result<(), Box<dyn std::error::Error + Send + Sync
 
     // Fetch latest release from GitHub
     let client = reqwest::Client::builder()
-        .user_agent("mods-cli")
+        .user_agent("modl-cli")
         .timeout(std::time::Duration::from_secs(15))
         .build()?;
 
@@ -147,7 +147,7 @@ pub fn print_if_update_available() {
         style("→").dim(),
         style(format!("v{}", cache.latest_version)).green().bold(),
     );
-    eprintln!("  Run {} to update", style("mods upgrade").bold(),);
+    eprintln!("  Run {} to update", style("modl upgrade").bold(),);
 }
 
 #[cfg(test)]
