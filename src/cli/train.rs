@@ -192,7 +192,8 @@ pub async fn run(
         gpu_ctx.as_ref(),
         &base_model,
         &trigger_word,
-    );
+    )
+    .context("Failed to resolve training preset for base model")?;
 
     // -----------------------------------------------------------------
     // Apply CLI overrides (take precedence over preset values)

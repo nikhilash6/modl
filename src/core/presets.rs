@@ -1,3 +1,5 @@
+use anyhow::{Result, bail};
+
 use crate::core::job::{LoraType, Optimizer, Preset, TrainingParams};
 
 /// Dataset statistics needed for preset resolution
@@ -21,35 +23,52 @@ pub enum BaseModelFamily {
     FluxSchnell,
     ZImage,
     Chroma,
+    QwenImage,
     Sdxl,
     Sd15,
 }
 
 impl BaseModelFamily {
     /// Infer family from a base model ID string
-    pub fn from_model_id(id: &str) -> Self {
+    pub fn from_model_id(id: &str) -> Result<Self> {
         let lower = id.to_lowercase();
         if lower.contains("z-image") || lower.contains("z_image") || lower.contains("zimage") {
-            Self::ZImage
+            Ok(Self::ZImage)
         } else if lower.contains("chroma") {
-            Self::Chroma
+            Ok(Self::Chroma)
+        } else if lower.contains("qwen-image") || lower.contains("qwen_image") {
+            Ok(Self::QwenImage)
         } else if lower.contains("flux") && lower.contains("schnell") {
-            Self::FluxSchnell
+            Ok(Self::FluxSchnell)
         } else if lower.contains("flux") {
-            Self::Flux
+            Ok(Self::Flux)
         } else if lower.contains("sdxl") || lower.contains("xl") {
-            Self::Sdxl
+            Ok(Self::Sdxl)
         } else if lower.contains("sd-1.5") || lower.contains("sd15") || lower.contains("1.5") {
-            Self::Sd15
+            Ok(Self::Sd15)
         } else {
-            // Default to Flux for modern models
-            Self::Flux
+            bail!(
+                "Unknown base model family for '{id}'. Supported families include:\n\
+                 - flux-dev / flux-schnell\n\
+                 - z-image / z-image-turbo\n\
+                 - chroma\n\
+                 - qwen-image\n\
+                 - sdxl-base-1.0\n\
+                 - sd-1.5\n\n\
+                 If this is a custom model path, include a known family token in the base id \
+                 (for example: Qwen/Qwen-Image, stabilityai/stable-diffusion-xl-base-1.0)."
+            )
         }
     }
 
     pub fn default_resolution(&self) -> u32 {
         match self {
-            Self::Flux | Self::FluxSchnell | Self::Sdxl | Self::ZImage | Self::Chroma => 1024,
+            Self::Flux
+            | Self::FluxSchnell
+            | Self::Sdxl
+            | Self::ZImage
+            | Self::Chroma
+            | Self::QwenImage => 1024,
             Self::Sd15 => 512,
         }
     }
@@ -64,8 +83,8 @@ pub fn resolve_params(
     gpu: Option<&GpuContext>,
     base_model: &str,
     trigger_word: &str,
-) -> TrainingParams {
-    let family = BaseModelFamily::from_model_id(base_model);
+) -> Result<TrainingParams> {
+    let family = BaseModelFamily::from_model_id(base_model)?;
     let resolution = family.default_resolution();
     let vram_mb = gpu.map(|g| g.vram_mb).unwrap_or(0);
     let quantize = vram_mb > 0 && vram_mb < 40_000;
@@ -135,7 +154,7 @@ pub fn resolve_params(
         }
     };
 
-    TrainingParams {
+    Ok(TrainingParams {
         preset,
         lora_type,
         trigger_word: trigger_word.to_string(),
@@ -150,7 +169,7 @@ pub fn resolve_params(
         num_repeats: 0,             // 0 = let adapter choose per lora_type
         caption_dropout_rate: -1.0, // negative = let adapter choose
         resume_from: None,
-    }
+    })
 }
 
 /// steps_per_image * images, clamped to [min, max]
@@ -178,11 +197,23 @@ mod tests {
         }
     }
 
+    fn resolve(
+        preset: Preset,
+        lora_type: LoraType,
+        dataset: &DatasetStats,
+        gpu: Option<&GpuContext>,
+        base_model: &str,
+        trigger_word: &str,
+    ) -> TrainingParams {
+        resolve_params(preset, lora_type, dataset, gpu, base_model, trigger_word)
+            .expect("preset resolution should succeed")
+    }
+
     // --- Quick preset ---
 
     #[test]
     fn quick_min_steps() {
-        let p = resolve_params(
+        let p = resolve(
             Preset::Quick,
             LoraType::Character,
             &dataset(3),
@@ -198,7 +229,7 @@ mod tests {
 
     #[test]
     fn quick_max_steps() {
-        let p = resolve_params(
+        let p = resolve(
             Preset::Quick,
             LoraType::Character,
             &dataset(50),
@@ -212,7 +243,7 @@ mod tests {
 
     #[test]
     fn quick_normal_scaling() {
-        let p = resolve_params(
+        let p = resolve(
             Preset::Quick,
             LoraType::Character,
             &dataset(8),
@@ -228,7 +259,7 @@ mod tests {
 
     #[test]
     fn standard_small_dataset() {
-        let p = resolve_params(
+        let p = resolve(
             Preset::Standard,
             LoraType::Character,
             &dataset(8),
@@ -244,7 +275,7 @@ mod tests {
 
     #[test]
     fn standard_large_dataset() {
-        let p = resolve_params(
+        let p = resolve(
             Preset::Standard,
             LoraType::Character,
             &dataset(25),
@@ -260,7 +291,7 @@ mod tests {
 
     #[test]
     fn standard_medium_dataset() {
-        let p = resolve_params(
+        let p = resolve(
             Preset::Standard,
             LoraType::Character,
             &dataset(15),
@@ -278,7 +309,7 @@ mod tests {
 
     #[test]
     fn advanced_defaults() {
-        let p = resolve_params(
+        let p = resolve(
             Preset::Advanced,
             LoraType::Character,
             &dataset(10),
@@ -294,7 +325,7 @@ mod tests {
 
     #[test]
     fn quantize_when_low_vram() {
-        let p = resolve_params(
+        let p = resolve(
             Preset::Quick,
             LoraType::Character,
             &dataset(10),
@@ -307,7 +338,7 @@ mod tests {
 
     #[test]
     fn no_quantize_when_high_vram() {
-        let p = resolve_params(
+        let p = resolve(
             Preset::Quick,
             LoraType::Character,
             &dataset(10),
@@ -320,7 +351,7 @@ mod tests {
 
     #[test]
     fn no_quantize_when_no_gpu_info() {
-        let p = resolve_params(
+        let p = resolve(
             Preset::Quick,
             LoraType::Character,
             &dataset(10),
@@ -333,7 +364,7 @@ mod tests {
 
     #[test]
     fn resolution_from_base_model() {
-        let flux = resolve_params(
+        let flux = resolve(
             Preset::Quick,
             LoraType::Character,
             &dataset(10),
@@ -343,7 +374,7 @@ mod tests {
         );
         assert_eq!(flux.resolution, 1024);
 
-        let sdxl = resolve_params(
+        let sdxl = resolve(
             Preset::Quick,
             LoraType::Character,
             &dataset(10),
@@ -353,7 +384,7 @@ mod tests {
         );
         assert_eq!(sdxl.resolution, 1024);
 
-        let sd15 = resolve_params(
+        let sd15 = resolve(
             Preset::Quick,
             LoraType::Character,
             &dataset(10),
@@ -366,7 +397,7 @@ mod tests {
 
     #[test]
     fn optimizer_always_adamw8bit() {
-        let p = resolve_params(
+        let p = resolve(
             Preset::Standard,
             LoraType::Character,
             &dataset(10),
@@ -379,7 +410,7 @@ mod tests {
 
     #[test]
     fn trigger_word_passthrough() {
-        let p = resolve_params(
+        let p = resolve(
             Preset::Quick,
             LoraType::Character,
             &dataset(10),
@@ -388,5 +419,23 @@ mod tests {
             "MY_TRIGGER",
         );
         assert_eq!(p.trigger_word, "MY_TRIGGER");
+    }
+
+    #[test]
+    fn unknown_family_returns_helpful_error() {
+        let err = resolve_params(
+            Preset::Quick,
+            LoraType::Character,
+            &dataset(10),
+            None,
+            "totally-unknown-model",
+            "OHWX",
+        )
+        .expect_err("unknown base family should error");
+
+        let msg = err.to_string();
+        assert!(msg.contains("Unknown base model family"));
+        assert!(msg.contains("qwen-image"));
+        assert!(msg.contains("sdxl-base-1.0"));
     }
 }
