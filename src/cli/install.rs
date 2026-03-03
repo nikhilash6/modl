@@ -10,6 +10,7 @@ use crate::core::config::Config;
 use crate::core::db::Database;
 use crate::core::download;
 use crate::core::gpu;
+use crate::core::huggingface;
 use crate::core::manifest::Manifest;
 use crate::core::registry::RegistryIndex;
 use crate::core::resolver;
@@ -17,6 +18,11 @@ use crate::core::store::Store;
 use crate::core::symlink;
 
 pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) -> Result<()> {
+    // Handle hf:owner/repo prefix — direct pull from HuggingFace
+    if let Some(repo_id) = id.strip_prefix("hf:") {
+        return run_hf_pull(repo_id, variant, dry_run, force).await;
+    }
+
     let config = Config::load()?;
     let index = RegistryIndex::load_or_fetch().await?;
     let db = Database::open()?;
@@ -325,6 +331,208 @@ pub async fn run(id: &str, variant: Option<&str>, dry_run: bool, force: bool) ->
         "{} Installed {} successfully.",
         style("✓").green().bold(),
         style(id).bold()
+    );
+
+    Ok(())
+}
+
+// ── HuggingFace direct pull ─────────────────────────────────────────────
+
+async fn run_hf_pull(
+    repo_id: &str,
+    variant: Option<&str>,
+    dry_run: bool,
+    force: bool,
+) -> Result<()> {
+    let config = Config::load()?;
+    let db = Database::open()?;
+    let auth_store = AuthStore::load().unwrap_or_default();
+    let hf_token = auth_store.token_for("huggingface");
+
+    println!(
+        "{} Resolving {} on HuggingFace...",
+        style("→").cyan(),
+        style(format!("hf:{}", repo_id)).bold()
+    );
+
+    // Fetch model info
+    let model = huggingface::get_model(repo_id, hf_token.as_deref()).await?;
+
+    // Resolve the best file to download
+    let resolved = huggingface::resolve_download(repo_id, variant, hf_token.as_deref()).await?;
+
+    // Guess asset type from HF metadata
+    let asset_type_str = huggingface::guess_asset_type(&model, &resolved.filename);
+    let asset_type: crate::core::manifest::AssetType = asset_type_str
+        .parse()
+        .unwrap_or(crate::core::manifest::AssetType::Checkpoint);
+
+    // Build display name from repo ID
+    let display_name = repo_id
+        .split('/')
+        .next_back()
+        .unwrap_or(repo_id)
+        .to_string();
+
+    // Build a local ID for tracking
+    let local_id = format!("hf:{}", repo_id);
+
+    println!();
+    println!(
+        "  {} {} {}",
+        style("↓").cyan(),
+        style(&display_name).bold(),
+        style(format!("({}) [{}]", asset_type, HumanBytes(resolved.size))).dim(),
+    );
+    if model.siblings.len() > 1 {
+        let model_file_count = model
+            .siblings
+            .iter()
+            .filter(|s| {
+                let name = &s.filename;
+                [".safetensors", ".ckpt", ".bin", ".pth", ".gguf"]
+                    .iter()
+                    .any(|ext| name.ends_with(ext))
+                    && !name.contains('/')
+            })
+            .count();
+        if model_file_count > 1 {
+            println!(
+                "  {} Repo has {} model files — downloading: {}",
+                style("i").dim(),
+                model_file_count,
+                style(&resolved.filename).cyan(),
+            );
+        }
+    }
+    println!(
+        "  {} {}",
+        style("URL").dim(),
+        style(&resolved.url).dim().underlined(),
+    );
+
+    if dry_run {
+        println!();
+        println!("{}", style("Dry run — nothing downloaded.").dim());
+        return Ok(());
+    }
+
+    // Check if already installed
+    let installed_list = db.list_installed(None)?;
+    if !force && installed_list.iter().any(|m| m.id == local_id) {
+        println!();
+        println!(
+            "{} {} is already installed. Use --force to re-download.",
+            style("✓").green(),
+            style(&display_name).bold()
+        );
+        return Ok(());
+    }
+
+    let store = Store::new(config.store_root());
+
+    // We don't have a pre-known SHA256, so we use a placeholder prefix derived from
+    // the repo ID. After download we compute the real hash.
+    let temp_prefix = format!("{:0>16x}", {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        repo_id.hash(&mut hasher);
+        hasher.finish()
+    });
+
+    let store_path = store.path_for(&asset_type, &temp_prefix, &resolved.filename);
+    store.ensure_dir(&store_path)?;
+
+    if !store_path.exists() || force {
+        download::download_file(
+            &resolved.url,
+            &store_path,
+            if resolved.size > 0 {
+                Some(resolved.size)
+            } else {
+                None
+            },
+            hf_token.as_deref(),
+        )
+        .await
+        .with_context(|| format!("Failed to download {}", display_name))?;
+    } else {
+        println!("  {} Already in store", style("✓").green(),);
+    }
+
+    // Compute real SHA256
+    let sha256 =
+        Store::hash_file(&store_path).context("Failed to compute SHA256 of downloaded file")?;
+
+    // Move to content-addressed path if the temp prefix doesn't match
+    let real_prefix = &sha256[..16];
+    if temp_prefix != real_prefix {
+        let real_path = store.path_for(&asset_type, &sha256, &resolved.filename);
+        if real_path != store_path {
+            store.ensure_dir(&real_path)?;
+            if real_path.exists() {
+                // Already exists at correct path — remove the temp download
+                std::fs::remove_file(&store_path).ok();
+            } else {
+                std::fs::rename(&store_path, &real_path)
+                    .or_else(|_| {
+                        // Cross-device fallback
+                        std::fs::copy(&store_path, &real_path)?;
+                        std::fs::remove_file(&store_path)?;
+                        Ok::<(), std::io::Error>(())
+                    })
+                    .context("Failed to move file to content-addressed path")?;
+            }
+            // Clean up empty temp dir
+            if let Some(parent) = store_path.parent() {
+                std::fs::remove_dir(parent).ok();
+            }
+        }
+    }
+
+    let final_path = store.path_for(&asset_type, &sha256, &resolved.filename);
+    let actual_size = std::fs::metadata(&final_path)
+        .map(|m| m.len())
+        .unwrap_or(resolved.size);
+
+    // Create symlinks to configured targets
+    for target in &config.targets {
+        if target.symlink {
+            let link_path = compat::symlink_path(
+                &target.path,
+                &target.tool_type,
+                &asset_type,
+                &resolved.filename,
+            );
+            match symlink::create(&link_path, &final_path) {
+                Ok(()) => {
+                    println!("  {} Linked → {}", style("→").dim(), link_path.display());
+                }
+                Err(e) => {
+                    eprintln!("  {} Symlink failed: {}", style("!").yellow(), e);
+                }
+            }
+        }
+    }
+
+    // Record in database
+    db.insert_installed(
+        &local_id,
+        &display_name,
+        &asset_type.to_string(),
+        None,
+        &sha256,
+        actual_size,
+        &resolved.filename,
+        &final_path.to_string_lossy(),
+    )?;
+
+    println!();
+    println!(
+        "{} Installed {} (hf:{}) successfully.",
+        style("✓").green().bold(),
+        style(&display_name).bold(),
+        repo_id,
     );
 
     Ok(())

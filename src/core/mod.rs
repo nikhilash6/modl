@@ -6,6 +6,7 @@ pub mod db;
 pub mod download;
 pub mod executor;
 pub mod gpu;
+pub mod huggingface;
 pub mod job;
 pub mod manifest;
 pub mod preflight;

@@ -14,6 +14,7 @@ pub async fn run(comfyui: Option<&str>, a1111: Option<&str>) -> Result<()> {
     if comfyui.is_none() && a1111.is_none() {
         anyhow::bail!(
             "Specify a tool to link:\n\n  \
+             modl link ~/ComfyUI\n  \
              modl link --comfyui ~/ComfyUI\n  \
              modl link --a1111 ~/stable-diffusion-webui\n\n\
              This scans the tool's model folders and adopts recognized files into the modl store."
@@ -79,8 +80,16 @@ async fn link_tool(
         path.display()
     );
 
-    // Find model files (skip files that are already symlinks — already managed)
-    let models_dir = path.join("models");
+    // Determine the models directory:
+    // If the user passed a path that already IS the models dir (has ComfyUI-style
+    // subdirs like checkpoints/, loras/, vae/), use it directly.
+    // Otherwise, look for a models/ subdirectory.
+    let models_dir = if looks_like_models_dir(&path) {
+        path.clone()
+    } else {
+        path.join("models")
+    };
+
     if !models_dir.exists() {
         println!(
             "  {} No 'models' directory found at {}",
@@ -198,13 +207,17 @@ async fn link_tool(
             } else {
                 // Move file to store, replace with symlink
                 store.ensure_dir(&store_path)?;
-                std::fs::rename(&mf.file_path, &store_path).with_context(|| {
-                    format!(
-                        "Failed to move {} to store at {}",
-                        mf.file_path.display(),
-                        store_path.display()
-                    )
-                })?;
+                // Try rename first; fall back to copy+delete for cross-device moves
+                if std::fs::rename(&mf.file_path, &store_path).is_err() {
+                    std::fs::copy(&mf.file_path, &store_path).with_context(|| {
+                        format!(
+                            "Failed to copy {} to store at {}",
+                            mf.file_path.display(),
+                            store_path.display()
+                        )
+                    })?;
+                    std::fs::remove_file(&mf.file_path)?;
+                }
                 symlink::create(&mf.file_path, &store_path)?;
                 println!("  {} {} → store", style("✓").green(), mf.manifest.name,);
             }
@@ -224,11 +237,17 @@ async fn link_tool(
     }
 
     // Add to config targets if not already present
-    let already_targeted = config.targets.iter().any(|t| t.path == path);
+    // Store the tool root (parent of models dir), not the models dir itself
+    let tool_root = if looks_like_models_dir(&path) {
+        path.parent().unwrap_or(&path).to_path_buf()
+    } else {
+        path
+    };
+    let already_targeted = config.targets.iter().any(|t| t.path == tool_root);
 
     if !already_targeted {
         config.targets.push(TargetConfig {
-            path,
+            path: tool_root,
             tool_type,
             symlink: true,
         });
@@ -265,4 +284,27 @@ fn find_model_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()
         }
     }
     Ok(())
+}
+
+/// Check if a directory looks like a ComfyUI models directory (has characteristic subdirs).
+fn looks_like_models_dir(path: &Path) -> bool {
+    const KNOWN_SUBDIRS: &[&str] = &[
+        "checkpoints",
+        "loras",
+        "vae",
+        "clip",
+        "clip_vision",
+        "controlnet",
+        "embeddings",
+        "upscale_models",
+        "diffusion_models",
+        "text_encoders",
+    ];
+    let mut hits = 0;
+    for name in KNOWN_SUBDIRS {
+        if path.join(name).is_dir() {
+            hits += 1;
+        }
+    }
+    hits >= 2
 }

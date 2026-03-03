@@ -131,14 +131,17 @@ const DATASET_EXAMPLES: &str = "\
 
 const MODEL_PULL_EXAMPLES: &str = "\
 \x1b[1mExamples:\x1b[0m
-  # Pull a model (auto-selects variant for your GPU)
-  modl model pull flux-dev
+  # Pull a model from the registry
+  modl pull flux-dev
+
+  # Pull directly from HuggingFace
+  modl pull hf:stabilityai/stable-diffusion-xl-base-1.0
 
   # Force a specific variant
-  modl model pull flux-dev --variant fp8
+  modl pull flux-dev --variant fp8
 
   # Preview what would be downloaded
-  modl model pull sdxl-base-1.0 --dry-run
+  modl pull sdxl-base-1.0 --dry-run
 ";
 
 /// Auth provider for `modl auth` command.
@@ -279,13 +282,60 @@ pub enum TrainSubcommands {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Interactive first-run setup — detect tools, configure storage
-    Init,
+    /// Download a model, LoRA, VAE, or other asset
+    #[command(after_help = MODEL_PULL_EXAMPLES)]
+    Pull {
+        /// Registry ID (e.g. flux-dev) or HuggingFace repo (hf:owner/model)
+        id: String,
+        /// Force a specific variant (e.g., fp16, fp8, gguf-q4)
+        #[arg(long)]
+        variant: Option<String>,
+        /// Show what would be installed without doing it
+        #[arg(long)]
+        dry_run: bool,
+        /// Force re-download even if files already exist
+        #[arg(long)]
+        force: bool,
+    },
 
-    /// Manage models, LoRAs, VAEs, and other assets
-    Model {
-        #[command(subcommand)]
-        command: ModelCommands,
+    /// Remove an installed model
+    Rm {
+        /// Model ID to remove
+        id: String,
+        /// Force removal even if other items depend on this
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// List installed models
+    Ls {
+        /// Filter by asset type (checkpoint, lora, vae, text_encoder, etc.)
+        #[arg(long, short = 't', value_enum)]
+        r#type: Option<AssetType>,
+    },
+
+    /// Show detailed info about a model
+    Info {
+        /// Model ID to inspect
+        id: String,
+    },
+
+    /// Search the registry
+    Search {
+        /// Search query
+        query: String,
+        /// Filter by asset type
+        #[arg(long, short = 't', value_enum)]
+        r#type: Option<AssetType>,
+        /// Filter by compatible base model
+        #[arg(long)]
+        r#for: Option<String>,
+        /// Filter by tag
+        #[arg(long)]
+        tag: Option<String>,
+        /// Minimum rating
+        #[arg(long)]
+        min_rating: Option<f32>,
     },
 
     /// Train a LoRA with managed runtime
@@ -398,11 +448,20 @@ pub enum Commands {
         command: datasets::DatasetCommands,
     },
 
-    /// Manage embedded Python runtime
-    Runtime {
-        #[command(subcommand)]
-        command: runtime::RuntimeCommands,
+    /// Link a tool's model folder (ComfyUI, A1111)
+    Link {
+        /// Path to model directory (assumes ComfyUI layout)
+        path: Option<String>,
+        /// Path to ComfyUI installation
+        #[arg(long)]
+        comfyui: Option<String>,
+        /// Path to A1111 installation
+        #[arg(long)]
+        a1111: Option<String>,
     },
+
+    /// Fetch latest registry index
+    Update,
 
     /// Check for broken symlinks, missing deps, corrupt files
     Doctor {
@@ -429,13 +488,58 @@ pub enum Commands {
         provider: AuthProvider,
     },
 
-    /// Browse and manage generated outputs and training artifacts
+    /// Remove unreferenced files from the store
+    Gc,
+
+    /// Show disk usage breakdown
+    Space,
+
+    /// Update modl CLI to the latest release
+    Upgrade,
+
+    // ── Hidden commands ──────────────────────────────────────
+    /// Interactive first-run setup
+    #[command(hide = true)]
+    Init,
+
+    /// Show popular/trending models
+    #[command(hide = true)]
+    Popular {
+        /// Filter by asset type
+        #[arg(long, short = 't', value_enum)]
+        r#type: Option<AssetType>,
+        /// Filter by compatible base model
+        #[arg(long)]
+        r#for: Option<String>,
+    },
+
+    /// Export installed state to a lock file
+    #[command(hide = true)]
+    Export,
+
+    /// Import and install from a lock file
+    #[command(hide = true)]
+    Import {
+        /// Path to modl.lock file
+        path: String,
+    },
+
+    /// Manage models (use top-level commands instead)
+    #[command(hide = true)]
+    Model {
+        #[command(subcommand)]
+        command: ModelCommands,
+    },
+
+    /// Browse and manage generated outputs
+    #[command(hide = true)]
     Outputs {
         #[command(subcommand)]
         command: outputs::OutputCommands,
     },
 
-    /// Launch web UI to preview training samples, datasets, and configs
+    /// Launch web UI for preview
+    #[command(hide = true)]
     Preview {
         /// Port to bind the preview server on
         #[arg(long, default_value = "3333")]
@@ -448,16 +552,50 @@ pub enum Commands {
         foreground: bool,
     },
 
-    /// Update modl CLI to the latest release
-    Upgrade,
+    /// Manage embedded Python runtime
+    #[command(hide = true)]
+    Runtime {
+        #[command(subcommand)]
+        command: runtime::RuntimeCommands,
+    },
 
-    /// Dump CLI schema as JSON (for docs generation)
+    /// Dump CLI schema as JSON
     #[command(hide = true)]
     CliSchema,
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
     match cli.command {
+        Commands::Pull {
+            id,
+            variant,
+            dry_run,
+            force,
+        } => install::run(&id, variant.as_deref(), dry_run, force).await,
+        Commands::Rm { id, force } => uninstall::run(&id, force).await,
+        Commands::Ls { r#type } => list::run(r#type).await,
+        Commands::Info { id } => info::run(&id).await,
+        Commands::Search {
+            query,
+            r#type,
+            r#for,
+            tag,
+            min_rating,
+        } => search::run(&query, r#type, r#for.as_deref(), tag.as_deref(), min_rating).await,
+        Commands::Link {
+            path,
+            comfyui,
+            a1111,
+        } => {
+            let comfy = comfyui.or(path);
+            link::run(comfy.as_deref(), a1111.as_deref()).await
+        }
+        Commands::Update => update::run().await,
+        Commands::Popular { r#type, r#for } => popular::run(r#type, r#for.as_deref()).await,
+        Commands::Space => space::run().await,
+        Commands::Gc => gc::run().await,
+        Commands::Export => export::run().await,
+        Commands::Import { path } => import::run(&path).await,
         Commands::Init => init::run().await,
         Commands::Model { command } => run_model(command).await,
         Commands::Train {
