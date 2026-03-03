@@ -131,8 +131,10 @@
   .evo-grid { display: grid; gap: 4px; }
   .evo-grid .evo-hdr { font-size: 11px; font-weight: 600; color: var(--accent); text-align: left;
     padding-bottom: 4px; white-space: nowrap; }
-  .evo-grid img { width: 100%; display: block; border-radius: 4px; cursor: pointer;
-    transition: opacity 0.15s; border: 1px solid var(--border); }
+  .evo-grid img, .evo-grid .evo-placeholder { width: 100%; max-width: 280px; display: block;
+    border-radius: 4px; border: 1px solid var(--border); aspect-ratio: 1; }
+  .evo-grid img { cursor: pointer; transition: opacity 0.15s; object-fit: cover; }
+  .evo-grid .evo-placeholder { background: var(--bg3); opacity: 0.35; }
   .evo-grid img:hover { opacity: 0.85; border-color: var(--accent); }
 
   /* Lineage card */
@@ -473,25 +475,40 @@ async function selectRun(name) {
     if (promptCount === 0) {
       html += '<p style="color:var(--fg2)">No sample images generated yet.</p>';
     } else {
-      const stepCount = run.samples.length;
+      // Figure out expected total columns from sample_every + total_steps
+      const sampleEvery = run.config?.config?.process?.[0]?.sample?.sample_every;
+      const totalSteps = run.config?.config?.process?.[0]?.train?.steps;
+      const expectedCols = (sampleEvery && totalSteps)
+        ? Math.max(run.samples.length, Math.floor(totalSteps / sampleEvery))
+        : run.samples.length;
+
       html += `<div class="evo-table-wrap">`;
-      // Use CSS grid with one column per step for perfect alignment
-      html += `<div class="evo-grid" style="grid-template-columns: repeat(${stepCount}, minmax(100px, 1fr));">`;
-      // Step number headers (first row of the grid)
-      for (const group of run.samples) {
-        html += `<div class="evo-hdr">Step ${group.step.toLocaleString()}</div>`;
+      html += `<div class="evo-grid" style="grid-template-columns: repeat(${expectedCols}, minmax(80px, 280px));">`;
+
+      // Step number headers — real + placeholder
+      for (let c = 0; c < expectedCols; c++) {
+        if (c < run.samples.length) {
+          html += `<div class="evo-hdr">Step ${run.samples[c].step.toLocaleString()}</div>`;
+        } else {
+          const futureStep = sampleEvery ? sampleEvery * (c + 1) : '?';
+          html += `<div class="evo-hdr" style="opacity:0.35">Step ${Number(futureStep).toLocaleString()}</div>`;
+        }
       }
+
       // One grid-row per prompt
       for (let i = 0; i < promptCount; i++) {
         const promptText = samplePrompts[i] || `Prompt ${i + 1}`;
-        // Prompt label spans all columns
         html += `<div class="evo-prompt" style="grid-column: 1 / -1">${escapeHtml(promptText)}</div>`;
-        for (const group of run.samples) {
-          const img = group.images[i];
-          if (img) {
-            html += `<img src="/files/${img}" loading="lazy" onclick="openLightbox('/files/${img}')" title="Step ${group.step.toLocaleString()}">`;
+        for (let c = 0; c < expectedCols; c++) {
+          if (c < run.samples.length) {
+            const img = run.samples[c].images[i];
+            if (img) {
+              html += `<img src="/files/${img}" loading="lazy" onclick="openLightbox('/files/${img}')" title="Step ${run.samples[c].step.toLocaleString()}">`;
+            } else {
+              html += `<div class="evo-placeholder"></div>`;
+            }
           } else {
-            html += `<div></div>`;
+            html += `<div class="evo-placeholder"></div>`;
           }
         }
       }

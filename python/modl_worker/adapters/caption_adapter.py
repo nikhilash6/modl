@@ -62,16 +62,22 @@ def _load_florence2(emitter: EventEmitter, model_path: str | None = None) -> Tup
 
 
 def _caption_florence2(
-    model, processor, image_path: Path
+    model, processor, image_path: Path, style_mode: bool = False
 ) -> str:
-    """Generate a caption for a single image using Florence-2."""
+    """Generate a caption for a single image using Florence-2.
+    
+    When style_mode is True, uses <CAPTION> (shorter, factual) instead of
+    <DETAILED_CAPTION> to avoid describing art style/medium — better for
+    style LoRA datasets where the style should be learned implicitly.
+    """
     import torch
     from PIL import Image
 
     image = Image.open(image_path).convert("RGB")
 
-    # Use <DETAILED_CAPTION> task for richer descriptions
-    task = "<DETAILED_CAPTION>"
+    # <CAPTION> gives shorter factual descriptions (good for style LoRAs)
+    # <DETAILED_CAPTION> gives richer descriptions including style/medium
+    task = "<CAPTION>" if style_mode else "<DETAILED_CAPTION>"
     inputs = processor(text=task, images=image, return_tensors="pt").to(
         model.device, torch.float16
     )
@@ -118,13 +124,30 @@ def _load_blip(emitter: EventEmitter, model_path: str | None = None) -> Tuple:
     return model, processor
 
 
-def _caption_blip(model, processor, image_path: Path) -> str:
-    """Generate a caption for a single image using BLIP-2."""
+def _caption_blip(
+    model, processor, image_path: Path, style_mode: bool = False
+) -> str:
+    """Generate a caption for a single image using BLIP-2.
+    
+    When style_mode is True, uses a text prompt instructing the model to
+    describe content only, omitting art style/medium/technique — better for
+    style LoRA datasets.
+    """
     import torch
     from PIL import Image
 
     image = Image.open(image_path).convert("RGB")
-    inputs = processor(images=image, return_tensors="pt").to(model.device, torch.float16)
+
+    if style_mode:
+        # Prompt BLIP-2 to focus on content, not visual style
+        prompt = "Describe what is depicted in this image without mentioning the art style, medium, or drawing technique:"
+        inputs = processor(
+            images=image, text=prompt, return_tensors="pt"
+        ).to(model.device, torch.float16)
+    else:
+        inputs = processor(images=image, return_tensors="pt").to(
+            model.device, torch.float16
+        )
 
     with torch.no_grad():
         generated_ids = model.generate(**inputs, max_new_tokens=128)
@@ -161,6 +184,7 @@ def run_caption(config_path: Path, emitter: EventEmitter) -> int:
     model_name = spec.get("model", "florence-2")
     overwrite = spec.get("overwrite", False)
     model_path = spec.get("model_path")  # Local path from registry, if available
+    style_mode = spec.get("style", False)
 
     if not dataset_path.exists() or not dataset_path.is_dir():
         emitter.error(
@@ -179,17 +203,18 @@ def run_caption(config_path: Path, emitter: EventEmitter) -> int:
         return 0
 
     total = len(images)
-    emitter.info(f"Found {total} image(s) to caption using {model_name}")
+    mode_label = f"{model_name} (style mode: content only)" if style_mode else model_name
+    emitter.info(f"Found {total} image(s) to caption using {mode_label}")
     emitter.job_started(config=str(config_path))
 
     # Load model
     try:
         if model_name.lower() in ("florence-2", "florence2", "florence"):
             model, processor = _load_florence2(emitter, model_path)
-            caption_fn = _caption_florence2
+            caption_fn = lambda m, p, img: _caption_florence2(m, p, img, style_mode=style_mode)
         elif model_name.lower() in ("blip", "blip-2", "blip2"):
             model, processor = _load_blip(emitter, model_path)
-            caption_fn = _caption_blip
+            caption_fn = lambda m, p, img: _caption_blip(m, p, img, style_mode=style_mode)
         else:
             emitter.error(
                 "UNKNOWN_MODEL",

@@ -42,6 +42,12 @@ pub struct CaptionJobSpec {
     /// downloading from HuggingFace Hub.
     #[serde(default)]
     pub model_path: Option<String>,
+    /// Style LoRA mode: describe content only, omit art style/medium/technique.
+    /// When true, Florence-2 uses <CAPTION> (shorter, factual) instead of
+    /// <DETAILED_CAPTION>, and BLIP-2 gets a prompt instructing content-only
+    /// descriptions.
+    #[serde(default)]
+    pub style: bool,
 }
 
 fn default_caption_model() -> String {
@@ -500,12 +506,29 @@ mod tests {
             model: "florence-2".into(),
             overwrite: false,
             model_path: None,
+            style: false,
         };
         let yaml = serde_yaml::to_string(&spec).unwrap();
         let back: CaptionJobSpec = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(back.dataset_path, "/tmp/my-dataset");
         assert_eq!(back.model, "florence-2");
         assert!(!back.overwrite);
+        assert!(!back.style);
+    }
+
+    #[test]
+    fn test_caption_job_spec_style_mode() {
+        let spec = CaptionJobSpec {
+            dataset_path: "/tmp/style-dataset".into(),
+            model: "blip".into(),
+            overwrite: true,
+            model_path: None,
+            style: true,
+        };
+        let yaml = serde_yaml::to_string(&spec).unwrap();
+        let back: CaptionJobSpec = serde_yaml::from_str(&yaml).unwrap();
+        assert!(back.style);
+        assert_eq!(back.model, "blip");
     }
 
     #[test]

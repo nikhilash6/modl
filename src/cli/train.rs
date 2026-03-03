@@ -247,6 +247,26 @@ pub async fn run(
         .join("training_output")
         .join(&lora_name);
 
+    // Guard against overwriting an existing training run
+    if output_dir.exists() {
+        let has_safetensors = std::fs::read_dir(&output_dir)?
+            .filter_map(|e| e.ok())
+            .any(|e| e.path().extension().is_some_and(|ext| ext == "safetensors"));
+        if has_safetensors {
+            println!(
+                "{} A training run named '{}' already exists at {}",
+                style("✗").red().bold(),
+                style(&lora_name).bold(),
+                output_dir.display()
+            );
+            println!(
+                "  Use {} for a different name, or delete the existing run first.",
+                style("--name <new-name>").bold()
+            );
+            anyhow::bail!("Training run '{}' already exists", lora_name);
+        }
+    }
+
     std::fs::create_dir_all(&output_dir)?;
 
     let spec = TrainJobSpec {
@@ -361,6 +381,8 @@ async fn execute_training(
         )?
         .progress_chars("█▓░"),
     );
+    pb.set_message("preparing...");
+    let mut got_first_step = false;
 
     let mut artifact_paths: Vec<String> = Vec::new();
     let mut final_status = "completed";
@@ -375,6 +397,10 @@ async fn execute_training(
                 loss,
                 ..
             } => {
+                if !got_first_step {
+                    got_first_step = true;
+                    pb.set_message("".to_string());
+                }
                 pb.set_length(*total_steps as u64);
                 pb.set_position(*step as u64);
                 if let Some(l) = loss {

@@ -20,6 +20,11 @@ pub enum DatasetCommands {
     },
     /// List all managed datasets
     Ls,
+    /// Remove a managed dataset
+    Rm {
+        /// Dataset name to remove
+        name: String,
+    },
     /// Validate a dataset directory
     Validate {
         /// Dataset name or path to validate
@@ -57,6 +62,9 @@ pub enum DatasetCommands {
         /// Re-caption images that already have .txt files
         #[arg(long)]
         overwrite: bool,
+        /// Style LoRA mode: describe content only, omit art style/medium/technique
+        #[arg(long)]
+        style: bool,
     },
     /// Full pipeline: create → resize → tag/caption
     Prepare {
@@ -87,6 +95,7 @@ pub async fn run(command: DatasetCommands) -> Result<()> {
     match command {
         DatasetCommands::Create { name, from } => run_create(&name, &from).await.map(|_| ()),
         DatasetCommands::Ls => run_list().await,
+        DatasetCommands::Rm { name } => run_rm(&name).await,
         DatasetCommands::Validate { name_or_path } => run_validate(&name_or_path).await,
         DatasetCommands::Resize {
             name_or_path,
@@ -102,7 +111,8 @@ pub async fn run(command: DatasetCommands) -> Result<()> {
             name_or_path,
             model,
             overwrite,
-        } => run_caption(&name_or_path, &model, overwrite).await,
+            style,
+        } => run_caption(&name_or_path, &model, overwrite, style).await,
         DatasetCommands::Prepare {
             name,
             from,
@@ -178,6 +188,32 @@ async fn run_list() -> Result<()> {
     }
 
     println!("{table}");
+    Ok(())
+}
+
+async fn run_rm(name: &str) -> Result<()> {
+    let path = dataset::resolve_path(name);
+
+    if !path.exists() {
+        anyhow::bail!("Dataset '{}' not found at {}", name, path.display());
+    }
+
+    // Count what we're about to delete
+    let info = dataset::validate(&path).ok();
+    let image_count = info.as_ref().map_or(0, |i| i.image_count);
+
+    println!(
+        "{} Removing dataset '{}' ({} images) at {}",
+        style("→").cyan(),
+        style(name).bold(),
+        image_count,
+        path.display()
+    );
+
+    std::fs::remove_dir_all(&path)
+        .with_context(|| format!("Failed to remove dataset directory: {}", path.display()))?;
+
+    println!("{} Dataset '{}' removed", style("✓").green().bold(), name);
     Ok(())
 }
 
@@ -261,7 +297,12 @@ fn resolve_dataset_path(name_or_path: &str) -> PathBuf {
 // Caption
 // ---------------------------------------------------------------------------
 
-async fn run_caption(name_or_path: &str, model: &str, overwrite: bool) -> Result<()> {
+async fn run_caption(
+    name_or_path: &str,
+    model: &str,
+    overwrite: bool,
+    style_mode: bool,
+) -> Result<()> {
     let path = resolve_dataset_path(name_or_path);
 
     let info = dataset::validate(&path)
@@ -318,11 +359,19 @@ async fn run_caption(name_or_path: &str, model: &str, overwrite: bool) -> Result
         style(model).bold(),
     );
 
+    if style_mode {
+        println!(
+            "{} Style mode: captions will describe content only (no art style/medium)",
+            style("ℹ").dim(),
+        );
+    }
+
     let spec = CaptionJobSpec {
         dataset_path: path.to_string_lossy().to_string(),
         model: model.to_string(),
         overwrite,
         model_path: resolved_model_path,
+        style: style_mode,
     };
     let yaml = serde_yaml::to_string(&spec).context("Failed to serialize caption spec")?;
 
@@ -697,7 +746,7 @@ async fn run_prepare(
             style("Step 4/4").bold().cyan(),
             style("→").cyan()
         );
-        run_caption(name, model, true).await?;
+        run_caption(name, model, true, false).await?;
     } else {
         println!(
             "\n{} {} Skipping captioning",

@@ -79,6 +79,11 @@ The pipeline exists end-to-end. SDXL LoRA training works with preview generation
 - [x] SDXL LoRA training (confirmed working)
 - [x] Training previews / samples
 - [x] Dataset annotation
+- [x] Style-mode captioning (`--style` strips medium/technique references)
+- [ ] Upgrade captioner to Qwen2.5-VL-7B-Instruct (instruction-following VLM,
+      no regex post-processing needed — tell it "describe content, not style"
+      and it obeys. Fits 4090 in float16. Add as `--model qwen` option,
+      keep Florence-2 as fast default for non-style captioning)
 - [ ] Flux training E2E validation
 - [ ] Generation E2E validation (`modl generate` → image on disk)
 - [ ] Fix integration issues that surface on GPU
@@ -123,19 +128,38 @@ Prompt-first generate page. Training dashboard. Gallery.
 Build only after the CLI flow is rock-solid.
 See [archive/ui-architecture.md](archive/ui-architecture.md) for product spec.
 
+This is the foundation of the paid product — same UI powers `modl serve`
+(browser, GPU users) and the Tauri native app (Phase 8, Mac/laptop users).
+Build with Svelte, compile to a single JS bundle, `include_str!()` into binary.
+
 - [ ] REST + WebSocket API
-- [ ] Static UI compiled into binary
+- [ ] Svelte UI compiled into binary (migrate from vanilla JS)
 - [ ] Generate page (prompt → image, LoRA selector)
+- [ ] Training dashboard (launch + monitor from UI)
 - [ ] Output gallery
 
 ### Phase 7 — Cloud training (`--cloud`)
 
-`modl train --cloud` submits to a managed API. Cloud inference deferred.
+`modl train --cloud` submits to a managed API. **This is the monetization
+unlock** — Mac/laptop users with no GPU must use cloud, creating recurring
+revenue. Cloud inference deferred (cold start economics are unfavorable).
 See [archive/cloud-plan.md](archive/cloud-plan.md) for architecture and pricing model.
 
 - [ ] modl API service (auth, billing, job dispatch)
 - [ ] Modal GPU backend
 - [ ] CloudExecutor.submit() implementation
+
+### Phase 8 — Native app (Tauri)
+
+Wrap the Phase 6 Svelte UI in a Tauri native app for Mac/Windows distribution.
+Same UI, same Rust core, native webview instead of `localhost` in a browser.
+Targets the **paying user segment**: creative professionals on laptops with no
+GPU who use cloud training (Phase 7).
+
+- [ ] Tauri shell around existing Axum + Svelte stack
+- [ ] Native file pickers, drag-and-drop images, dock/taskbar icon
+- [ ] Code signing + DMG/MSI distribution
+- [ ] Auto-update via Tauri updater
 
 ### Backlog — Not planned
 
@@ -147,6 +171,27 @@ See [archive/cloud-plan.md](archive/cloud-plan.md) for architecture and pricing 
 | DAM / tagging / collections | Filesystem + `modl outputs search` is enough |
 | Node/graph editor | ComfyUI owns this, don't compete |
 | Multi-provider cloud (RunPod, etc.) | Get one provider working first |
+
+---
+
+## Business model
+
+**CLI is free, open source. Cloud + native app is the paid product.**
+
+Two user segments, different value:
+
+| Segment | What they use | Revenue | Role |
+|---------|--------------|---------|------|
+| GPU box users (Linux, SSH) | CLI + `modl serve` in browser | Free / low (cloud for heavy models) | Community, testers, contributors |
+| Mac/laptop users (no GPU) | Tauri native app + cloud training | Paid (recurring cloud usage) | Paying customers |
+
+The CLI builds credibility and community. Open-source model manager that
+"just works" attracts contributors and earns trust. The native app + cloud
+backend is where revenue comes from — creative professionals who want
+polish and don't have (or want to manage) GPU hardware.
+
+Pricing model TBD — likely per-minute GPU billing with a markup over
+raw Modal/RunPod costs, or a subscription with included training minutes.
 
 ---
 
@@ -172,7 +217,6 @@ See [archive/cloud-plan.md](archive/cloud-plan.md) for architecture and pricing 
 
 - Not a node editor (use ComfyUI)
 - Not a marketplace (use CivitAI)
-- Not a hosted service (you run it)
 - Not infinitely configurable (three presets, Advanced gives full YAML)
 - Not a DAM (filesystem + metadata JSON is enough)
-- Not a cloud platform (maybe later, not now)
+- Not an Electron app (Tauri = native webview, Rust backend, no Chromium bloat)

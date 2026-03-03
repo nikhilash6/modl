@@ -93,6 +93,7 @@ pub fn resolve_params(
     // Z-Image trains significantly faster than Flux/SDXL (~1.3s/iter on 5090).
     // For distilled models (ZImage turbo), keep LR at 1e-4 max to avoid
     // breaking distillation. Style LoRAs need 3000-5000 steps per Ostris.
+    // For SDXL/Flux style LoRAs, 12k-18k steps is the sweet spot.
     let is_zimage = matches!(family, BaseModelFamily::ZImage);
 
     let (steps, rank, learning_rate) = match (preset, lora_type) {
@@ -113,18 +114,20 @@ pub fn resolve_params(
             (steps, 32, 1e-4)
         }
         (Preset::Quick, LoraType::Style) => {
-            // Quick style: ~5 epochs worth. batch=2, repeats=10
-            // epoch ≈ img_count * 10 / 2 steps, so 5 epochs ≈ img * 25
-            let steps = compute_steps(img_count, 25, 4000, 15000);
+            // Quick style: enough to learn the style, not overfit.
+            // ~150 steps/img, floor 6k so small datasets still converge.
+            let steps = compute_steps(img_count, 150, 6000, 12000);
             (steps, 32, 1e-4)
         }
         (Preset::Standard, LoraType::Style) => {
-            // Standard style: ~15 epochs
-            let steps = compute_steps(img_count, 75, 8000, 40000);
+            // Standard style: 12k–25k range. Style LoRAs need significantly
+            // more steps than character/object to properly transfer.
+            let steps = compute_steps(img_count, 300, 12000, 25000);
             (steps, 64, 1e-4)
         }
         (Preset::Advanced, LoraType::Style) => {
-            let steps = compute_steps(img_count, 75, 8000, 50000);
+            // Advanced: full convergence range for large style datasets.
+            let steps = compute_steps(img_count, 400, 15000, 40000);
             (steps, 128, 1e-4)
         }
 
