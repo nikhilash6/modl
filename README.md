@@ -22,7 +22,7 @@ modl generate "a cat on mars"
 
 **GPU-aware.** Automatically picks the right model variant (fp16, fp8, quantized) for your VRAM. A 4090 gets full quality. An 8GB card still works.
 
-**Train LoRAs in one command.** Point it at a folder of images, pick a base model, and go. Auto-captioning, dataset prep, and sensible defaults included.
+**Train LoRAs in one command.** Point it at a folder of images, pick a base model, and go. Powered by [ai-toolkit](https://github.com/ostris/ai-toolkit) under the hood, with auto-captioning, dataset prep, and sensible defaults included.
 
 ---
 
