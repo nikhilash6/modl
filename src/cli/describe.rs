@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use crate::core::job::DescribeJobSpec;
 
-pub async fn run(paths: &[String], detail: &str, json: bool) -> Result<()> {
+pub async fn run(paths: &[String], detail: &str, model: Option<&str>, json: bool) -> Result<()> {
     if paths.is_empty() {
         anyhow::bail!("No image paths provided. Usage: modl describe <image_or_dir> [...]");
     }
@@ -16,17 +16,20 @@ pub async fn run(paths: &[String], detail: &str, json: bool) -> Result<()> {
         }
     }
 
+    let model_id = model.unwrap_or("qwen25-vl-3b").to_string();
+
     let spec = DescribeJobSpec {
         image_paths: paths.to_vec(),
-        model: "qwen25-vl-3b".to_string(),
+        model: model_id.clone(),
         detail: detail.to_string(),
     };
     let yaml = serde_yaml::to_string(&spec).context("Failed to serialize describe spec")?;
 
     if !json {
         println!(
-            "{} Describing image(s) (detail: {})...",
-            style("->").cyan(),
+            "{} Describing image(s) [{}, {}]...",
+            style("→").cyan(),
+            model_id,
             detail
         );
     }
@@ -47,13 +50,16 @@ pub async fn run(paths: &[String], detail: &str, json: bool) -> Result<()> {
                     .unwrap_or_default()
                     .to_string_lossy()
                     .to_string();
-                let text = entry
-                    .get("description")
+                let caption = entry
+                    .get("caption")
                     .and_then(|v| v.as_str())
                     .unwrap_or("(no description)");
 
-                println!("  {}:", filename);
-                println!("    {}", text);
+                println!("  {}:", style(filename).bold());
+                // Wrap long captions at ~80 chars
+                for line in textwrap(caption, 76) {
+                    println!("    {}", line);
+                }
                 println!();
             }
         }
@@ -64,4 +70,24 @@ pub async fn run(paths: &[String], detail: &str, json: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Simple word-wrap for terminal display.
+fn textwrap(s: &str, width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    for paragraph in s.split('\n') {
+        let mut line = String::new();
+        for word in paragraph.split_whitespace() {
+            if line.len() + word.len() + 1 > width && !line.is_empty() {
+                lines.push(line);
+                line = String::new();
+            }
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.push_str(word);
+        }
+        lines.push(line);
+    }
+    lines
 }

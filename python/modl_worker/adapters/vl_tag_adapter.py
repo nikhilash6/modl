@@ -1,12 +1,10 @@
-"""VL Tag adapter — automatic image labeling using Qwen2.5-VL-3B.
+"""VL Tag adapter — automatic image labeling using Qwen2.5-VL.
 
 Generates comma-separated tags/labels for images using a vision-language model.
-Unlike the dataset-focused tag_adapter.py, this operates on individual images
-and returns structured JSON results.
 
 Reads a vl-tag job spec YAML containing:
   image_paths: list[str]    — paths to images
-  model: str                — "qwen25-vl-3b" (default)
+  model: str                — "qwen25-vl-3b" (default) or "qwen25-vl-7b"
   max_tags: int             — maximum number of tags (optional)
 """
 
@@ -32,28 +30,10 @@ def _resolve_images(image_paths: list[str]) -> list[Path]:
     return result
 
 
-def _load_qwen_vl(emitter: EventEmitter):
-    """Load Qwen2.5-VL-3B model and processor."""
-    import torch
-    from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
-
-    emitter.info("Loading Qwen2.5-VL-3B model...")
-
-    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-        "Qwen/Qwen2.5-VL-3B-Instruct",
-        torch_dtype=torch.float16,
-        device_map="cuda",
-    )
-    processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-3B-Instruct")
-
-    return model, processor
-
-
 def run_vl_tag(config_path: Path, emitter: EventEmitter) -> int:
     """Run VL-based image tagging from a VlTagJobSpec YAML file."""
     import yaml
-    import torch
-    from qwen_vl_utils import process_vision_info
+    from modl_worker.adapters.vl_common import load_qwen_vl, run_vl_inference
 
     if not config_path.exists():
         emitter.error("SPEC_NOT_FOUND", f"VL tag spec not found: {config_path}", recoverable=False)
@@ -67,6 +47,7 @@ def run_vl_tag(config_path: Path, emitter: EventEmitter) -> int:
         return 2
 
     image_paths = spec.get("image_paths", [])
+    model_id = spec.get("model") or "qwen25-vl-3b"
     max_tags = spec.get("max_tags")
 
     images = _resolve_images(image_paths)
@@ -75,16 +56,14 @@ def run_vl_tag(config_path: Path, emitter: EventEmitter) -> int:
         return 2
 
     total = len(images)
-    emitter.info(f"Found {total} image(s) to tag")
+    emitter.info(f"Found {total} image(s) to tag using {model_id}")
     emitter.job_started(config=str(config_path))
 
     try:
-        model, processor = _load_qwen_vl(emitter)
+        model, processor = load_qwen_vl(emitter, model_id)
     except Exception as exc:
-        emitter.error("MODEL_LOAD_FAILED", f"Failed to load Qwen2.5-VL: {exc}", recoverable=False)
+        emitter.error("MODEL_LOAD_FAILED", f"Failed to load VL model: {exc}", recoverable=False)
         return 1
-
-    emitter.info("Model loaded, starting tagging...")
 
     prompt = "List the main objects and concepts in this image as comma-separated tags. Just the tags, nothing else."
 
@@ -96,40 +75,9 @@ def run_vl_tag(config_path: Path, emitter: EventEmitter) -> int:
 
         try:
             t0 = time.time()
-
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "image": str(image_path)},
-                        {"type": "text", "text": prompt},
-                    ],
-                }
-            ]
-
-            text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-            image_inputs, video_inputs = process_vision_info(messages)
-            inputs = processor(
-                text=[text],
-                images=image_inputs,
-                videos=video_inputs,
-                padding=True,
-                return_tensors="pt",
-            ).to("cuda")
-
-            with torch.no_grad():
-                generated_ids = model.generate(**inputs, max_new_tokens=256)
-
-            generated_ids_trimmed = [
-                out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-            ]
-            response = processor.batch_decode(
-                generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-            )[0].strip()
-
+            response = run_vl_inference(model, processor, str(image_path), prompt, max_tokens=256)
             elapsed = time.time() - t0
 
-            # Parse comma-separated tags
             tags = [t.strip() for t in response.split(",") if t.strip()]
             if max_tags and len(tags) > max_tags:
                 tags = tags[:max_tags]
@@ -143,7 +91,7 @@ def run_vl_tag(config_path: Path, emitter: EventEmitter) -> int:
 
         except Exception as exc:
             emitter.warning("VL_TAG_FAILED", f"Failed to tag {image_path.name}: {exc}")
-            results.append({"image": str(image_path), "tags": [], "error": str(exc)})
+            results.append({"image": str(image_path), "tags": []})
             errors += 1
 
     emitter.progress(stage="vl-tag", step=total, total_steps=total)

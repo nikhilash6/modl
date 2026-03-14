@@ -571,6 +571,9 @@ pub enum Commands {
         /// Minimum confidence threshold
         #[arg(long)]
         threshold: Option<f64>,
+        /// VL model: qwen25-vl-3b (fast, 6GB) or qwen25-vl-7b (quality, 16GB)
+        #[arg(long)]
+        model: Option<String>,
         /// Output result as JSON
         #[arg(long)]
         json: bool,
@@ -584,6 +587,9 @@ pub enum Commands {
         /// Detail level: brief, detailed, verbose
         #[arg(long, default_value = "detailed")]
         detail: String,
+        /// VL model: qwen25-vl-3b (fast, 6GB) or qwen25-vl-7b (quality, 16GB)
+        #[arg(long)]
+        model: Option<String>,
         /// Output result as JSON
         #[arg(long)]
         json: bool,
@@ -598,6 +604,9 @@ pub enum Commands {
         /// Maximum number of tags
         #[arg(long)]
         max_tags: Option<usize>,
+        /// VL model: qwen25-vl-3b (fast, 6GB) or qwen25-vl-7b (quality, 16GB)
+        #[arg(long)]
+        model: Option<String>,
         /// Output result as JSON
         #[arg(long)]
         json: bool,
@@ -1050,18 +1059,21 @@ pub async fn run(cli: Cli) -> Result<()> {
             query,
             paths,
             threshold,
+            model,
             json,
-        } => ground::run(&query, &paths, threshold, json).await,
+        } => ground::run(&query, &paths, threshold, model.as_deref(), json).await,
         Commands::Describe {
             paths,
             detail,
+            model,
             json,
-        } => describe::run(&paths, &detail, json).await,
+        } => describe::run(&paths, &detail, model.as_deref(), json).await,
         Commands::VlTag {
             paths,
             max_tags,
+            model,
             json,
-        } => vl_tag::run(&paths, max_tags, json).await,
+        } => vl_tag::run(&paths, max_tags, model.as_deref(), json).await,
         Commands::Compare {
             paths,
             reference,
