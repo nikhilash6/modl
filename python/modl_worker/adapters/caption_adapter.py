@@ -219,10 +219,18 @@ def run_caption(config_path: Path, emitter: EventEmitter) -> int:
         elif model_name.lower() in ("blip", "blip-2", "blip2"):
             model, processor = _load_blip(emitter, model_path)
             caption_fn = lambda m, p, img: _caption_blip(m, p, img, style_mode=style_mode)
+        elif model_name.lower() in ("qwen", "qwen-vl", "qwen25-vl", "qwen25-vl-3b"):
+            from modl_worker.adapters.vl_common import load_qwen_vl, run_vl_inference
+            model, processor = load_qwen_vl(emitter, "qwen25-vl-3b")
+            if style_mode:
+                _qwen_prompt = "Describe what is depicted in this image without mentioning the art style, medium, or drawing technique. Be concise."
+            else:
+                _qwen_prompt = "Describe this image in detail, including all objects, people, and the setting."
+            caption_fn = lambda m, p, img: run_vl_inference(m, p, str(img), _qwen_prompt, max_tokens=256)
         else:
             emitter.error(
                 "UNKNOWN_MODEL",
-                f"Unknown captioning model: {model_name}. Use 'florence-2' or 'blip'.",
+                f"Unknown captioning model: {model_name}. Use 'florence-2', 'blip', or 'qwen'.",
                 recoverable=False,
             )
             return 2

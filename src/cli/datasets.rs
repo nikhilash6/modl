@@ -57,7 +57,7 @@ pub enum DatasetCommands {
         /// Dataset name or path
         name_or_path: String,
         /// Captioning model to use
-        #[arg(long, default_value = "florence-2", value_parser = ["florence-2", "blip"])]
+        #[arg(long, default_value = "florence-2", value_parser = ["florence-2", "blip", "qwen"])]
         model: String,
         /// Re-caption images that already have .txt files
         #[arg(long)]
