@@ -1,12 +1,10 @@
 # modl
 
-**The easiest way to generate images and train LoRAs on your own GPU.**
-
-One command to install, one command to generate, one command to train. No Python environments, no dependency hell, no 2-hour YouTube tutorials.
+**Train LoRAs and generate images on your own GPU.** Web UI + CLI. Managed runtime. It just works.
 
 ```bash
 curl -fsSL https://modl.run/install.sh | sh
-modl pull flux-schnell
+modl pull z-image-turbo
 modl generate "a cat on mars"
 ```
 
@@ -33,10 +31,10 @@ modl generate "a cat on mars"
 curl -fsSL https://modl.run/install.sh | sh
 
 # Pull a model (auto-selects variant for your GPU)
-modl pull flux-dev
+modl pull z-image-turbo
 
 # Generate
-modl generate "a photo of a mountain lake at sunset" --base flux-dev
+modl generate "a photo of a mountain lake at sunset"
 ```
 
 Or do everything at once:
@@ -49,11 +47,30 @@ This installs modl, pulls a starter model, and launches the web UI.
 
 ---
 
+## Web UI
+
+```bash
+modl serve
+```
+
+Generate, train, browse outputs, and manage models from the browser at `http://localhost:3333`. Same engine as the CLI.
+
+![modl web UI — generate tab](https://modl.run/ui-generate-lora.webp)
+
+Install as a system service (starts on boot):
+
+```bash
+modl serve --install-service
+```
+
+---
+
 ## Train a LoRA
 
 ```bash
 # Prepare dataset (auto-captions your images)
-modl dataset prepare my-product --from ~/photos/product-shots/
+modl dataset create my-product --from ~/photos/product-shots/
+modl dataset caption my-product
 
 # Train
 modl train --dataset my-product --base flux-dev --name product-v1 --lora-type object
@@ -64,44 +81,70 @@ modl generate "a photo of OHWX on marble countertop" --lora product-v1
 
 ---
 
-## Web UI
+## Supported Models
+
+16 models across 6 families. See the full comparison at **[modl.run/guides/model-comparison](https://modl.run/guides/model-comparison)**.
+
+| Family | Models | Best for |
+|--------|--------|----------|
+| **Flux 2** | Dev, Klein 4B, Klein 9B | Fast generation (4 steps), editing, best quality/speed |
+| **Flux 1** | Dev, Schnell, Fill Dev | Largest ecosystem, LoRAs, ControlNet, inpainting |
+| **Chroma** | Chroma | Apache 2.0, negative prompts, 8.9B Flux fork |
+| **Z-Image** | Base, Turbo | Strong quality/size, fast turbo, great ControlNet |
+| **Qwen Image** | Image, Image Edit | Text rendering (Chinese/English), instruction editing |
+| **Legacy SD** | SDXL, SD 1.5 | Low VRAM, massive LoRA library |
+
+Plus 70+ ControlNets, IP-Adapters, VAEs, text encoders, upscalers, and segmentation models. Browse all at **[modl.run/models](https://modl.run/models)**.
 
 ```bash
-modl serve
-```
-
-Full generation, training, and output management in the browser at `http://localhost:3333`. Same engine as the CLI.
-
-Install as a system service (starts on boot):
-
-```bash
-modl serve --install-service
+modl pull flux2-klein-4b    # fast, 4-step generation + editing
+modl pull flux-dev          # high quality, best for training
+modl pull z-image-turbo     # strong quality, fast, great ControlNet
+modl pull chroma            # open-source (Apache 2.0), negative prompts
 ```
 
 ---
 
-## Supported Models
+## Image Primitives
 
-| Family | Model | Params | VRAM (fp8) | Generate | Edit | Train |
-|--------|-------|--------|------------|:--------:|:----:|:-----:|
-| **Flux 1** | Flux Dev | 12B | 16 GB | yes | | yes |
-| | Flux Schnell | 12B | 16 GB | yes | | yes |
-| **Flux 2** | Flux 2 Dev | 24B | 24 GB | yes | yes | |
-| | Klein 4B | 4B | 10 GB | yes | yes | yes |
-| | Klein 9B | 9B | 16 GB | yes | yes | yes |
-| **Z-Image** | Z-Image | 6B | 12 GB | yes | | yes |
-| | Z-Image Turbo | 6B | 12 GB | yes | | yes |
-| **Qwen Image** | Qwen Image | 20B | 20 GB | yes | | yes |
-| | Qwen Image Edit | 20B | 20 GB | | yes | |
-| **Legacy** | SDXL | 3.5B | 5 GB | yes | | yes |
-
-**Generate** = text-to-image. **Edit** = instruction-based image editing (`modl edit "make it blue" --image photo.jpg`). **Train** = LoRA fine-tuning.
+### Generation & Editing
 
 ```bash
-modl pull flux-schnell     # fast, 4-step generation
-modl pull flux-dev         # high quality, best for training
-modl pull z-image-turbo    # lightweight, fast
+modl generate "prompt" --base flux-dev          # text to image
+modl generate "prompt" --init-image photo.png   # image to image
+modl generate "prompt" --init-image img --mask mask.png  # inpainting
+modl edit "add sunglasses" --image portrait.png  # instruction editing
 ```
+
+### ControlNet & Style Reference
+
+```bash
+modl preprocess canny photo.png                 # extract edges / depth / pose
+modl generate "prompt" --controlnet edges.png   # structural control
+modl generate "prompt" --style-ref painting.png # style transfer
+```
+
+### Vision-Language
+
+```bash
+modl ground "coffee cup" cafe.png               # find objects → bounding boxes
+modl describe photo.png                         # generate captions
+modl vl-tag photo.png                           # auto-tag images
+```
+
+### Analysis & Post-Processing
+
+```bash
+modl score photo.png                            # aesthetic quality (1-10)
+modl detect photo.png                           # face detection
+modl segment photo.png --bbox 120,340,280,500   # create masks (SAM)
+modl face-restore photo.png                     # fix AI faces
+modl upscale photo.png --scale 4                # 4x resolution
+modl remove-bg photo.png                        # transparent PNG
+modl compare ref.png target.png                 # CLIP similarity
+```
+
+Every command supports `--json` for scripting and agent pipelines.
 
 ---
 
@@ -112,19 +155,7 @@ modl link --comfyui ~/ComfyUI
 modl link --a1111 ~/stable-diffusion-webui
 ```
 
-Modl scans your model folders, hashes files, and moves recognized models into the store — replacing them with symlinks. Your tools keep working, nothing breaks.
-
----
-
-## Image Tools
-
-```bash
-modl edit "make the sky purple" --image photo.jpg    # AI image editing
-modl upscale photo.jpg                                # 4x upscale
-modl remove-bg photo.jpg                              # transparent PNG
-modl face-restore photo.jpg                           # fix faces
-modl score photo.jpg                                  # aesthetic quality
-```
+modl scans your model folders, hashes files, and moves recognized models into the store — replacing them with symlinks. Your tools keep working, nothing breaks.
 
 ---
 
@@ -148,8 +179,8 @@ Full CLI reference: **[modl.run/docs](https://modl.run/docs)**
 
 ## Author
 
-Created by [Pedro Alonso](mailto:pedro@pedroalonso.net) ([@pedr0alonso](https://github.com/pedr0alonso)).
+Created by [Pedro Alonso](https://github.com/pedropaf).
 
 ## License
 
-MIT
+[AGPL-3.0](LICENSE)
