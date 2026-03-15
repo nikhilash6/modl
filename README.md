@@ -10,7 +10,7 @@ modl pull flux-schnell
 modl generate "a cat on mars"
 ```
 
-**[Website](https://modl.run)** · **[Docs](https://modl.run/docs)** · **[Model Registry](https://github.com/modl-org/modl-registry)** · **[Issues](https://github.com/modl-org/modl/issues)**
+**[Website](https://modl.run)** · **[Docs](https://modl.run/docs)** · **[Guides](https://modl.run/guides)** · **[Model Registry](https://github.com/modl-org/modl-registry)** · **[Changelog](CHANGELOG.md)**
 
 ---
 
@@ -145,6 +145,10 @@ Single Rust binary for speed and distribution. Managed Python runtime for GPU co
 Full CLI reference: **[modl.run/docs](https://modl.run/docs)**
 
 ---
+
+## Author
+
+Created by [Pedro Alonso](mailto:pedro@pedroalonso.net) ([@pedr0alonso](https://github.com/pedr0alonso)).
 
 ## License
 
