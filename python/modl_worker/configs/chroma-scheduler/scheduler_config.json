@@ -12,7 +12,7 @@
   "stochastic_sampling": false,
   "time_shift_type": "exponential",
   "use_beta_sigmas": false,
-  "use_dynamic_shifting": true,
+  "use_dynamic_shifting": false,
   "use_exponential_sigmas": false,
   "use_karras_sigmas": false
 }

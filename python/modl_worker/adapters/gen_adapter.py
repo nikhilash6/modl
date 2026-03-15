@@ -265,6 +265,13 @@ def run_generate_with_pipeline(
     else:
         gen_kwargs["guidance_scale"] = guidance
 
+    # Chroma supports and benefits from negative prompts (unlike Flux).
+    if arch == "chroma":
+        neg = params.get("negative_prompt", "")
+        if not neg:
+            neg = "low quality, ugly, unfinished, out of focus, deformed, disfigured, blurry"
+        gen_kwargs["negative_prompt"] = neg
+
     is_flux_fill = arch in ("flux_fill", "flux_fill_onereward")
 
     if mode == "txt2img":
