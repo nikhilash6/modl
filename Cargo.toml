@@ -83,6 +83,7 @@ libc = "0.2"
 
 # LLM runtime (behind feature flag — heavy compile)
 llama-cpp-2 = { version = "0.1", optional = true }
+walkdir = "2.5.0"
 
 [features]
 default = []

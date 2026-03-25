@@ -1557,6 +1557,7 @@ dependencies = [
  "tower-http",
  "urlencoding",
  "uuid",
+ "walkdir",
  "zip",
  "zstd",
 ]

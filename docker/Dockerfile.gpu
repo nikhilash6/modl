@@ -1,0 +1,32 @@
+FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl git python3 python3-venv python3-pip openssh-server && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install torch + diffusers + all deps at build time (not runtime).
+# This makes the image ~8GB but eliminates the 3-min bootstrap on every boot.
+RUN pip install --no-cache-dir \
+    torch torchvision --index-url https://download.pytorch.org/whl/cu121
+RUN pip install --no-cache-dir \
+    diffusers transformers accelerate safetensors \
+    sentencepiece protobuf peft pillow
+
+# Install modl binary (pre-built for linux-x86_64, targeting glibc 2.35)
+COPY target/x86_64-unknown-linux-gnu/release/modl /usr/local/bin/modl
+
+# Copy Python worker package (gen_adapter, train_adapter, etc.)
+COPY python/modl_worker /opt/modl/python/modl_worker
+
+# Non-interactive init (creates ~/.modl, no models)
+RUN modl init --defaults
+
+COPY docker/entrypoint-gpu.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENV MODL_WORKER_PYTHON_ROOT=/opt/modl/python
+
+EXPOSE 8765
+
+ENTRYPOINT ["/entrypoint.sh"]

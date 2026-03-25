@@ -496,6 +496,17 @@ pub enum GpuCommands {
 
     /// Open a shell to the attached GPU instance
     Ssh,
+
+    /// Run as a GPU agent on a remote instance (internal — called by onstart script)
+    #[command(hide = true)]
+    Agent {
+        /// Session token for API authentication
+        #[arg(long)]
+        session_token: String,
+        /// API base URL (e.g. https://hub.modl.run)
+        #[arg(long, default_value = "https://hub.modl.run")]
+        api_base: String,
+    },
 }
 
 // ── Top-level commands ───────────────────────────────────────────────────
@@ -1363,6 +1374,10 @@ pub async fn run(cli: Cli) -> Result<()> {
             GpuCommands::Detach => gpu::detach().await,
             GpuCommands::Status => gpu::status().await,
             GpuCommands::Ssh => gpu::ssh().await,
+            GpuCommands::Agent {
+                session_token,
+                api_base,
+            } => gpu::agent(&session_token, &api_base).await,
         },
 
         // ── Auth ─────────────────────────────────────────────────────

@@ -32,6 +32,10 @@ pub trait Executor {
     fn submit_generate(&mut self, spec: &GenerateJobSpec) -> Result<JobHandle>;
     fn submit_edit(&mut self, spec: &EditJobSpec) -> Result<JobHandle>;
     fn events(&mut self, job_id: &str) -> Result<mpsc::Receiver<JobEvent>>;
+    /// Clean up resources after a job completes (e.g. destroy GPU session).
+    fn cleanup(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------

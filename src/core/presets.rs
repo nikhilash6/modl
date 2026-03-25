@@ -181,17 +181,20 @@ pub fn resolve_params(
         //   Flux2 (Klein): similar to Schnell — fast convergence.
         //   Z-Image: inconsistent for character, moderate speed.
         //   Generic (Flux dev, Chroma): standard speed.
+        // Z-Image character: prodigy converges ~2x faster than adamw.
+        // With prodigy, likeness appears at ~600 steps, peaks ~1500-2000.
+        // Old adamw defaults were 2500-3500; prodigy needs roughly half.
         (Preset::Quick, _) if is_zimage => {
-            let steps = compute_steps(img_count, 100, 1000, 1500);
+            let steps = compute_steps(img_count, 50, 800, 1200);
             (steps, 8, 1e-4)
         }
         (Preset::Standard, _) if is_zimage => {
-            let steps = compute_steps(img_count, 150, 1500, 3000);
+            let steps = compute_steps(img_count, 75, 1500, 2000);
             let rank = if img_count < 20 { 16 } else { 32 };
             (steps, rank, 1e-4)
         }
         (Preset::Advanced, _) if is_zimage => {
-            let steps = compute_steps(img_count, 200, 2000, 4000);
+            let steps = compute_steps(img_count, 100, 2000, 3000);
             let rank = if img_count < 20 { 16 } else { 32 };
             (steps, rank, 1e-4)
         }
