@@ -47,6 +47,9 @@ pub struct LocalExecutor {
     runtime_root: PathBuf,
     /// Whether to try the persistent worker socket before spawning a one-shot process.
     pub use_worker: bool,
+    /// Set HF_HUB_OFFLINE=1 on the Python worker. Default true (local mode).
+    /// Set to false when running as a remote agent so models can be downloaded.
+    pub hf_offline: bool,
     /// Map from job_id to (child, receiver)
     jobs: std::collections::HashMap<String, JobState>,
 }
@@ -64,6 +67,7 @@ impl LocalExecutor {
             python_path,
             runtime_root,
             use_worker: true,
+            hf_offline: true,
             jobs: std::collections::HashMap::new(),
         }
     }
@@ -431,7 +435,7 @@ impl LocalExecutor {
             .arg("--job-id")
             .arg(job_id)
             .env("PYTHONPATH", py_path)
-            .env("HF_HUB_OFFLINE", "1")
+            .env("HF_HUB_OFFLINE", if self.hf_offline { "1" } else { "0" })
             .env("MODL_DEVICE", crate::core::gpu::detect_device_str())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -520,7 +524,7 @@ impl LocalExecutor {
             .arg("--job-id")
             .arg(job_id)
             .env("PYTHONPATH", py_path)
-            .env("HF_HUB_OFFLINE", "1")
+            .env("HF_HUB_OFFLINE", if self.hf_offline { "1" } else { "0" })
             .env("MODL_DEVICE", crate::core::gpu::detect_device_str())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
