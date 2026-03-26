@@ -49,6 +49,7 @@ struct AgentJobResponse {
     spec: serde_json::Value,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct PresignResponse {
     upload_url: String,
@@ -66,6 +67,7 @@ struct AgentStatusPayload {
     status: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize)]
 struct AgentArtifactPayload {
     job_id: String,
@@ -75,6 +77,7 @@ struct AgentArtifactPayload {
     size_bytes: u64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize)]
 struct PresignRequest {
     filename: String,
@@ -226,19 +229,35 @@ async fn execute_train_job(
     let mut event_batch: Vec<serde_json::Value> = Vec::new();
     let mut sequence: u64 = 0;
     let mut final_status = "completed";
-    let mut artifact_paths: Vec<(String, Option<String>, Option<u64>)> = Vec::new();
+    let mut last_hub_ref: Option<String> = None;
 
     for event in rx {
         sequence += 1;
 
-        // Collect artifact info for upload later
-        if let EventPayload::Artifact {
-            ref path,
-            ref sha256,
-            ref size_bytes,
-        } = event.event
-        {
-            artifact_paths.push((path.clone(), sha256.clone(), *size_bytes));
+        // Push each checkpoint to hub immediately as it's produced
+        if let EventPayload::Artifact { ref path, .. } = event.event {
+            let local_path = std::path::Path::new(path);
+            if local_path.exists() && local_path.extension().is_some_and(|e| e == "safetensors") {
+                let step = parse_step_from_filename(path);
+                let is_final = step.is_none(); // no step suffix = final LoRA
+                eprintln!(
+                    "  Pushing checkpoint to hub: {}{}",
+                    local_path.display(),
+                    step.map(|s| format!(" (step {s})")).unwrap_or_default()
+                );
+
+                match hub_push_checkpoint(&spec.output.lora_name, local_path, &spec, step, is_final)
+                    .await
+                {
+                    Ok(hub_ref) => {
+                        eprintln!("  {} Published: {}", style("✓").green(), hub_ref);
+                        last_hub_ref = Some(hub_ref);
+                    }
+                    Err(e) => {
+                        eprintln!("{} Hub push failed: {e:#}", style("⚠").yellow());
+                    }
+                }
+            }
         }
 
         if matches!(
@@ -287,59 +306,24 @@ async fn execute_train_job(
         let _ = report_events(client, api_base, auth, &job.job_id, &event_batch).await;
     }
 
-    // Push artifacts to hub (LoRA + samples as hub versions)
-    if final_status == "completed" {
-        for (path, _sha256, _size_bytes) in &artifact_paths {
-            let local_path = std::path::Path::new(path);
-            if local_path.exists() && local_path.extension().is_some_and(|e| e == "safetensors") {
-                eprintln!("  Pushing LoRA to hub: {}", local_path.display());
-                match hub_push_artifact(
-                    &spec.output.lora_name,
-                    local_path,
-                    &spec.model.base_model_id,
-                    &spec.params.trigger_word,
-                )
-                .await
-                {
-                    Ok(hub_ref) => {
-                        eprintln!("  {} Published to hub: {}", style("✓").green(), hub_ref);
-                        // Report hub registration event
-                        sequence += 1;
-                        let hub_event = serde_json::json!({
-                            "schema_version": "v1",
-                            "job_id": job.job_id,
-                            "sequence": sequence,
-                            "timestamp": chrono::Utc::now().to_rfc3339(),
-                            "source": "modl_agent",
-                            "event": {
-                                "type": "result",
-                                "result_type": "hub_registered",
-                                "data": { "hub_ref": hub_ref }
-                            },
-                        });
-                        let _ =
-                            report_events(client, api_base, auth, &job.job_id, &[hub_event]).await;
-                    }
-                    Err(e) => {
-                        eprintln!("{} Hub push failed: {e:#}", style("⚠").yellow());
-                        // Fall back to raw R2 upload
-                        if let Err(e2) = upload_artifact(
-                            client,
-                            api_base,
-                            auth,
-                            &job.job_id,
-                            local_path,
-                            _sha256.as_deref().unwrap_or(""),
-                            _size_bytes.unwrap_or(0),
-                        )
-                        .await
-                        {
-                            eprintln!("{} R2 upload also failed: {e2:#}", style("⚠").yellow());
-                        }
-                    }
-                }
-            }
-        }
+    // Report hub registration event (for the last pushed checkpoint)
+    if final_status == "completed"
+        && let Some(ref hub_ref) = last_hub_ref
+    {
+        sequence += 1;
+        let hub_event = serde_json::json!({
+            "schema_version": "v1",
+            "job_id": job.job_id,
+            "sequence": sequence,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "source": "modl_agent",
+            "event": {
+                "type": "result",
+                "result_type": "hub_registered",
+                "data": { "hub_ref": hub_ref }
+            },
+        });
+        let _ = report_events(client, api_base, auth, &job.job_id, &[hub_event]).await;
     }
 
     // Now send the completed event (held back until after hub push)
@@ -465,6 +449,7 @@ async fn update_job_status(
 }
 
 /// Upload a training artifact to R2 and register it in the DB.
+#[allow(dead_code)]
 async fn upload_artifact(
     client: &reqwest::Client,
     api_base: &str,
@@ -619,7 +604,207 @@ fn write_hub_config(api_base: &str, api_key: &str) -> Result<()> {
     Ok(())
 }
 
+/// Parse step number from checkpoint filename.
+/// Format: "{name}_{step:09d}.safetensors" → Some(step)
+/// Final LoRA "{name}.safetensors" → None
+fn parse_step_from_filename(path: &str) -> Option<u32> {
+    let stem = std::path::Path::new(path).file_stem()?.to_str()?;
+    let step_str = stem.rsplit('_').next()?;
+    if step_str.chars().all(|c| c.is_ascii_digit()) && step_str.len() >= 6 {
+        step_str.parse().ok()
+    } else {
+        None
+    }
+}
+
+/// Zip sample images from the training output directory up to a given step.
+fn zip_samples(
+    output_dir: &str,
+    up_to_step: Option<u32>,
+) -> Option<(std::path::PathBuf, Vec<String>, usize)> {
+    let samples_dir = std::path::Path::new(output_dir)
+        .join(std::path::Path::new(output_dir).file_name()?)
+        .join("samples");
+
+    if !samples_dir.exists() {
+        return None;
+    }
+
+    let mut image_files: Vec<_> = std::fs::read_dir(&samples_dir)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            (name.ends_with(".jpg") || name.ends_with(".png"))
+                && if let Some(max_step) = up_to_step {
+                    // Parse step from filename: {timestamp}__{step}_{idx}.jpg
+                    name.split("__")
+                        .nth(1)
+                        .and_then(|s| s.split('_').next())
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .is_some_and(|s| s <= max_step)
+                } else {
+                    true
+                }
+        })
+        .collect();
+
+    if image_files.is_empty() {
+        return None;
+    }
+
+    image_files.sort_by_key(|a| a.file_name());
+
+    // Collect unique prompts (by prompt index)
+    let mut max_prompt_idx = 0u32;
+    for f in &image_files {
+        let name = f.file_name().to_string_lossy().to_string();
+        if let Some(idx_str) = name.split("__").nth(1).and_then(|s| s.split('_').nth(1))
+            && let Some(idx) = idx_str
+                .split('.')
+                .next()
+                .and_then(|s| s.parse::<u32>().ok())
+        {
+            max_prompt_idx = max_prompt_idx.max(idx);
+        }
+    }
+
+    let count = image_files.len();
+
+    // Zip them
+    let tmp = std::env::temp_dir().join(format!("modl-samples-{}.zip", std::process::id()));
+    let file = std::fs::File::create(&tmp).ok()?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    for entry in &image_files {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if let Ok(bytes) = std::fs::read(entry.path()) {
+            let _ = zip.start_file(&name, options);
+            let _ = std::io::Write::write_all(&mut zip, &bytes);
+        }
+    }
+    let _ = zip.finish();
+
+    // We don't have prompt text here — return empty prompts (metadata has them)
+    Some((tmp, vec![], count))
+}
+
+/// Push a checkpoint to the hub with metadata and samples.
+async fn hub_push_checkpoint(
+    lora_name: &str,
+    lora_path: &std::path::Path,
+    spec: &TrainJobSpec,
+    step: Option<u32>,
+    is_final: bool,
+) -> Result<String> {
+    use crate::core::hub::{CreateItemRequest, HubClient};
+
+    let hub = HubClient::from_config(true)?;
+    let me = hub.me().await.context("Failed to get hub account")?;
+    let username = me.username.as_deref().unwrap_or("unknown");
+
+    let slug = lora_name
+        .to_lowercase()
+        .replace(' ', "-")
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .collect::<String>();
+
+    // Create hub item if not exists
+    let _ = hub
+        .create_item(&CreateItemRequest {
+            slug: slug.clone(),
+            item_type: "lora".to_string(),
+            visibility: "private".to_string(),
+            description: Some(format!("Cloud-trained LoRA: {lora_name}")),
+            tags: vec!["cloud-trained".to_string()],
+            base_model: Some(spec.model.base_model_id.clone()),
+            trigger_words: if spec.params.trigger_word.is_empty() {
+                vec![]
+            } else {
+                vec![spec.params.trigger_word.clone()]
+            },
+        })
+        .await;
+
+    // Start push
+    let push_resp = hub.push_start(username, &slug).await?;
+
+    // Upload LoRA
+    crate::core::hub::upload_file_presigned(
+        &push_resp.upload_url,
+        lora_path,
+        "application/octet-stream",
+    )
+    .await?;
+
+    // Zip and upload samples if available
+    let mut samples_count = 0usize;
+    if let Some(ref samples_url) = push_resp.samples_upload_url
+        && let Some((zip_path, _, count)) = zip_samples(&spec.output.destination_dir, step)
+    {
+        samples_count = count;
+        let _ = crate::core::hub::upload_file_presigned(
+            samples_url,
+            &zip_path,
+            "application/octet-stream",
+        )
+        .await;
+        let _ = std::fs::remove_file(&zip_path);
+    }
+
+    // Compute SHA256
+    let file_bytes = std::fs::read(lora_path)?;
+    let sha256 = {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(&file_bytes);
+        format!("{:x}", hasher.finalize())
+    };
+
+    // Rich metadata
+    let metadata = serde_json::json!({
+        "source": "modl-cloud-agent",
+        "base_model": spec.model.base_model_id,
+        "trigger_words": [spec.params.trigger_word],
+        "lora_type": format!("{:?}", spec.params.lora_type).to_lowercase(),
+        "file_name": lora_path.file_name().and_then(|n| n.to_str()).unwrap_or("lora.safetensors"),
+        "checkpoint_step": step,
+        "is_checkpoint": step.is_some(),
+        "is_final": is_final,
+        "training": {
+            "steps": spec.params.steps,
+            "learning_rate": spec.params.learning_rate,
+            "optimizer": format!("{:?}", spec.params.optimizer).to_lowercase(),
+            "rank": spec.params.rank,
+            "resolution": spec.params.resolution,
+            "batch_size": spec.params.batch_size,
+        },
+        "dataset": {
+            "name": spec.dataset.name,
+            "image_count": spec.dataset.image_count,
+        },
+        "samples_r2_key": push_resp.samples_r2_key,
+        "samples_count": samples_count,
+    });
+
+    hub.push_complete(
+        username,
+        &slug,
+        &push_resp.version_id,
+        file_bytes.len() as u64,
+        &sha256,
+        Some(metadata),
+    )
+    .await?;
+
+    Ok(format!("{username}/{slug}"))
+}
+
 /// Push a LoRA artifact to the hub. Returns the hub reference (username/slug).
+#[allow(dead_code)]
 async fn hub_push_artifact(
     lora_name: &str,
     lora_path: &std::path::Path,
