@@ -807,8 +807,8 @@ pub enum Commands {
         /// Hub slug/name
         #[arg(long)]
         name: String,
-        /// Visibility: public or private
-        #[arg(long, default_value = "public", value_parser = ["public", "private"])]
+        /// Visibility: public, private, or unlisted
+        #[arg(long, default_value = "public", value_parser = ["public", "private", "unlisted"])]
         visibility: String,
         /// Optional description
         #[arg(long)]

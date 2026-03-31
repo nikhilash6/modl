@@ -27,8 +27,8 @@ pub async fn run(
     trigger_words: &[String],
     owner: Option<&str>,
 ) -> Result<()> {
-    if visibility != "public" && visibility != "private" {
-        bail!("visibility must be 'public' or 'private'");
+    if visibility != "public" && visibility != "private" && visibility != "unlisted" {
+        bail!("visibility must be 'public', 'private', or 'unlisted'");
     }
 
     let client = HubClient::from_config(true)?;
