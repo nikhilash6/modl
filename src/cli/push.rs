@@ -25,6 +25,7 @@ pub async fn run(
     description: Option<&str>,
     base_model: Option<&str>,
     trigger_words: &[String],
+    all_checkpoints: bool,
     owner: Option<&str>,
 ) -> Result<()> {
     if visibility != "public" && visibility != "private" && visibility != "unlisted" {
@@ -41,9 +42,22 @@ pub async fn run(
     match kind {
         "lora" => {
             let source_ctx = resolve_lora_source_context(source)?;
-            let files = source_ctx.files;
+            let mut files = source_ctx.files;
             if files.is_empty() {
                 bail!("No .safetensors files found to push");
+            }
+
+            // Default: push only the final checkpoint. The samples.zip already
+            // contains images for every training step, so the hub evolution grid
+            // works without intermediate checkpoint weights.
+            if !all_checkpoints && files.len() > 1 {
+                let final_file = files.pop().unwrap(); // sorted: last = final
+                println!(
+                    "{} Skipping {} intermediate checkpoint(s) (use --checkpoints to include them)",
+                    style("·").dim(),
+                    files.len()
+                );
+                files = vec![final_file];
             }
 
             let db = Database::open().ok();

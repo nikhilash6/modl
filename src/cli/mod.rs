@@ -797,28 +797,38 @@ pub enum Commands {
         force: bool,
     },
 
-    /// Push LoRAs or datasets to modl hub
+    /// Push LoRAs or datasets to modl hub.
+    ///
+    /// By default, pushes only the final checkpoint + sample images. The sample
+    /// evolution grid in the hub UI works from the samples alone — intermediate
+    /// checkpoint weights are not needed for visualization.
+    ///
+    /// Use --checkpoints to upload all intermediate checkpoint files (useful if
+    /// you want others to download and test specific training steps).
     Push {
         /// Asset kind: lora or dataset
         #[arg(value_parser = ["lora", "dataset"])]
         kind: String,
-        /// Source file or directory
+        /// Source: file path, directory, or training run name
         source: String,
-        /// Hub slug/name
+        /// Hub slug/name for the item
         #[arg(long)]
         name: String,
-        /// Visibility: public, private, or unlisted
+        /// Visibility: public (discoverable), unlisted (link-only), or private (owner-only)
         #[arg(long, default_value = "public", value_parser = ["public", "private", "unlisted"])]
         visibility: String,
         /// Optional description
         #[arg(long)]
         description: Option<String>,
-        /// Base model (mainly for LoRAs)
+        /// Base model (inferred from training manifest if omitted)
         #[arg(long)]
         base: Option<String>,
         /// Trigger word(s) (repeat flag for multiple)
         #[arg(long = "trigger")]
         trigger_words: Vec<String>,
+        /// Upload all intermediate checkpoints, not just the final one
+        #[arg(long)]
+        checkpoints: bool,
         /// Optional owner username override
         #[arg(long)]
         owner: Option<String>,
@@ -1288,6 +1298,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             description,
             base,
             trigger_words,
+            checkpoints,
             owner,
         } => {
             push::run(
@@ -1298,6 +1309,7 @@ pub async fn run(cli: Cli) -> Result<()> {
                 description.as_deref(),
                 base.as_deref(),
                 &trigger_words,
+                checkpoints,
                 owner.as_deref(),
             )
             .await
