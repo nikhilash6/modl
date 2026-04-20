@@ -335,6 +335,34 @@ pub struct RemoveBgJobSpec {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComposeLayer {
+    pub path: String,
+    #[serde(default = "default_center")]
+    pub position: [f64; 2],
+    #[serde(default = "default_one")]
+    pub scale: f64,
+    #[serde(default = "default_one")]
+    pub opacity: f64,
+}
+
+fn default_center() -> [f64; 2] {
+    [0.5, 0.5]
+}
+
+fn default_one() -> f64 {
+    1.0
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComposeJobSpec {
+    pub background: String,
+    pub layers: Vec<ComposeLayer>,
+    pub output_dir: String,
+    #[serde(default)]
+    pub canvas_size: Option<[u32; 2]>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EditJobSpec {
     pub prompt: String,
     pub model: ModelRef,
